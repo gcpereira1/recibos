@@ -222,5 +222,10 @@ svg { fill: currentColor; }
   }
   .cds--modal-header, .cds--modal-footer { flex: none; }
   .cds--modal-content { flex: 1 1 auto; min-block-size: 0; padding-block-end: 1.5rem; }
-  .cds--modal-footer { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  /* Os botões vão até ao fundo do ecrã; só o texto sobe acima da barra de início do iPhone. */
+  .cds--modal-footer { padding-bottom: 0; background: transparent; }
+  .cds--modal-footer .cds--btn {
+    min-block-size: calc(4rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
 }
