@@ -212,8 +212,7 @@ svg { fill: currentColor; }
 /* Janela como as folhas do iOS: presa ao fundo do ecrã (bottom: 0), sem depender de 100vh,
    que no iPhone pode ser mais alto do que o ecrã visível e cortar os botões. */
 .cds--modal { inset: 0; block-size: auto; inline-size: auto; }
-.cds--modal-footer { block-size: auto; min-block-size: 4rem; }
-.cds--modal-footer .cds--btn { min-block-size: 4rem; block-size: auto; }
+
 @media (max-width: 41.99rem) {
   .cds--modal { display: block; }
   .cds--modal .cds--modal-container {
@@ -225,10 +224,17 @@ svg { fill: currentColor; }
   }
   .cds--modal-header, .cds--modal-footer { flex: none; }
   .cds--modal-content { flex: 1 1 auto; min-block-size: 0; padding-block-end: 1.5rem; }
-  /* Os botões vão até ao fundo do ecrã; só o texto sobe acima da barra de início do iPhone. */
-  .cds--modal-footer { padding-bottom: 0; background: transparent; }
-  .cds--modal-footer .cds--btn {
-    min-block-size: calc(4rem + env(safe-area-inset-bottom, 0px));
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
 }
+
+/* Botões da janela como nas folhas do iOS: com margem, lado a lado, e um espaço por baixo
+   que acompanha a barra de início de cada iPhone (0 no iPhone SE, cerca de 34px nos outros). */
+.cds--modal-footer {
+  display: flex; gap: .75rem; block-size: auto;
+  padding: .75rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  background: var(--cds-layer-01);
+}
+.cds--modal-footer .cds--btn {
+  flex: 1 1 0; max-inline-size: none; margin: 0;
+  min-block-size: 3.75rem; block-size: auto; padding: 0 1rem;
+}
+.cds--modal-footer .cds--btn:not(.cds--skeleton) { padding-block: 0; align-items: center; justify-content: center; text-align: center; }
