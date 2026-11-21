@@ -379,12 +379,22 @@ async function saveDraft() {
 }
 
 // ---------- projetos ----------
+let creatingProject = false; // um segundo toque enquanto grava não faz nada
 async function createProject(rawName) {
+  if (creatingProject) return null;
   const name = String(rawName || '').trim();
   if (!name) { alert('Escreva o nome do projeto.'); return null; }
   if (state.projects.some((p) => collator.compare(p.name, name) === 0)) { alert('Já existe um projeto com este nome.'); return null; }
   const p = { id: uid(), name, createdAt: new Date().toISOString() };
-  await putOne('projects', p);
+  creatingProject = true;
+  try {
+    await putOne('projects', p);
+  } catch {
+    alert('Não foi possível guardar o projeto. Tente outra vez.');
+    return null;
+  } finally {
+    creatingProject = false;
+  }
   state.projects.push(p);
   state.projects.sort(byName);
   return p;
