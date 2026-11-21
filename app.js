@@ -20,6 +20,7 @@ const safeName = (s) => String(s).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').tri
 const icon = (name, cls = '') => `<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const kindOf = (n) => (n.ext === 'jpg' ? 'Foto' : n.pageCount ? `PDF, ${n.pageCount} páginas` : 'PDF');
 const MAIL_LIMIT = 20e6; // limite prudente para anexos de e-mail
+const APP_VERSION = '14'; // igual ao número em CACHE no sw.js
 
 // ---------- componentes Carbon (HTML) ----------
 function textField(id, label, value = '', { hint = '', placeholder = '', autocomplete = 'off' } = {}) {
@@ -948,6 +949,21 @@ function renderSettings() {
     ? `Última cópia: ${fmtDateTime(state.settings.lastBackup)}`
     : 'Ainda sem cópia';
 }
+
+// Vai buscar a versão mais recente do app. Os recibos ficam guardados (IndexedDB não é tocado).
+$('update-action').onclick = async () => {
+  const b = $('update-action');
+  b.disabled = true;
+  b.firstChild.textContent = 'A atualizar…';
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    await reg?.update();
+    const keys = await caches.keys();
+    await Promise.all(keys.map((k) => caches.delete(k)));
+  } catch {}
+  location.reload();
+};
+$('app-version').textContent = `Versão ${APP_VERSION}`;
 
 $('settings-form').onsubmit = async (e) => {
   e.preventDefault();

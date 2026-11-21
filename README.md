@@ -24,4 +24,4 @@ npm install
 npm run build
 ```
 
-Ao mudar ficheiros da app, aumentar a versão em `CACHE` no `sw.js`.
+Ao mudar ficheiros da app, aumentar o número em `CACHE` no `sw.js` e em `APP_VERSION` no `app.js` (aparece em Ajustes).
