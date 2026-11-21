@@ -16,9 +16,9 @@ const collator = new Intl.Collator('pt', { sensitivity: 'base' });
 const byName = (a, b) => collator.compare(a.name, b.name);
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
 const isPdf = (f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '');
-const safeName = (s) => String(s).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').trim() || 'Sem nome';
+const safeName = (s) => String(s).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').trim().replace(/^\.+/, '').trim() || 'Sem nome';
 const icon = (name, cls = '') => `<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
-const kindOf = (n) => (n.ext === 'jpg' ? 'Foto' : n.pageCount ? `PDF, ${n.pageCount} páginas` : 'PDF');
+const kindOf = (n) => (n.ext === 'jpg' ? 'Foto' : Number(n.pageCount) > 1 ? `PDF, ${Number(n.pageCount)} páginas` : 'PDF');
 const MAIL_LIMIT = 20e6; // limite prudente para anexos de e-mail
 const APP_VERSION = '18'; // igual ao número em CACHE no sw.js
 
@@ -694,8 +694,11 @@ function showBackupShare(file) {
   };
 }
 
-const validNote = (n) => n && typeof n.id === 'string' && typeof n.path === 'string' && typeof n.createdAt === 'string'
-  && /^\d{4}-\d{2}$/.test(n.month) && typeof n.stamp === 'string' && (n.ext === 'jpg' || n.ext === 'pdf');
+// A cópia pode vir de qualquer lado: só se aceita o formato que o app escreve.
+const validDate = (s) => typeof s === 'string' && s.length <= 40 && !Number.isNaN(Date.parse(s));
+const validNote = (n) => n && typeof n.id === 'string' && n.id.length <= 100 && typeof n.path === 'string' && validDate(n.createdAt)
+  && /^\d{4}-(0[1-9]|1[0-2])$/.test(n.month) && /^\d{4}-\d{2}-\d{2}_\d{4}$/.test(n.stamp) && (n.ext === 'jpg' || n.ext === 'pdf')
+  && (n.sentAt == null || validDate(n.sentAt)) && (n.pageCount == null || (Number.isInteger(n.pageCount) && n.pageCount > 0 && n.pageCount < 1000));
 
 async function restoreFrom(file) {
   const notBackup = 'Este ficheiro não é uma cópia de segurança deste app.';
@@ -714,17 +717,26 @@ async function restoreFrom(file) {
   const idMap = new Map();
   const newProjects = [];
   for (const p of data.projects) {
-    if (!p || typeof p.id !== 'string' || typeof p.name !== 'string' || !p.name.trim()) continue;
-    const same = state.projects.find((x) => x.id === p.id || collator.compare(x.name, p.name) === 0)
-      || newProjects.find((x) => collator.compare(x.name, p.name) === 0);
+    if (!p || typeof p.id !== 'string' || !p.id || p.id.length > 100 || p.id === '__new' || typeof p.name !== 'string') continue;
+    const name = p.name.trim().slice(0, 60);
+    if (!name) continue;
+    const same = state.projects.find((x) => x.id === p.id || collator.compare(x.name, name) === 0)
+      || newProjects.find((x) => x.id === p.id || collator.compare(x.name, name) === 0);
     if (same) { idMap.set(p.id, same.id); continue; }
-    const np = { id: p.id, name: p.name.trim().slice(0, 60), createdAt: p.createdAt || new Date().toISOString() };
+    const np = { id: p.id, name, createdAt: validDate(p.createdAt) ? p.createdAt : new Date().toISOString() };
     newProjects.push(np);
     idMap.set(p.id, np.id);
   }
   const byPath = new Map(items.map((i) => [i.path, i.bytes]));
   const have = new Set(state.notes.map((n) => n.id));
-  const candidates = data.notes.filter((n) => validNote(n) && !have.has(n.id) && byPath.has(n.path));
+  // Cada recibo tem o seu ficheiro: ids ou ficheiros repetidos entram uma só vez.
+  const usedPaths = new Set();
+  const candidates = data.notes.filter((n) => {
+    if (!validNote(n) || have.has(n.id) || !byPath.has(n.path) || usedPaths.has(n.path)) return false;
+    have.add(n.id);
+    usedPaths.add(n.path);
+    return true;
+  });
   if (!candidates.length && !newProjects.length) { alert('Esta cópia não tem nada que ainda não esteja neste telemóvel.'); return; }
   if (!confirm(`Restaurar ${plural(candidates.length, 'recibo', 'recibos')} e ${plural(newProjects.length, 'projeto novo', 'projetos novos')}? O que já existe neste telemóvel fica como está.`)) return;
 
