@@ -89,8 +89,11 @@ export function readZip(buffer) {
   let p = v.getUint32(eocd + 16, true);
   const dec = new TextDecoder();
   const out = [];
+  // Um ZIP forjado pode apontar muitas entradas para os mesmos bytes ou para fora do ficheiro:
+  // cada entrada tem de caber no ficheiro e as entradas devolvem vistas, nunca cópias.
+  const invalid = () => new Error('ZIP inválido');
   for (let i = 0; i < count; i++) {
-    if (v.getUint32(p, true) !== 0x02014b50) throw new Error('ZIP inválido');
+    if (v.getUint32(p, true) !== 0x02014b50) throw invalid();
     const method = v.getUint16(p + 10, true);
     const size = v.getUint32(p + 20, true);
     const nameLen = v.getUint16(p + 28, true);
@@ -99,8 +102,10 @@ export function readZip(buffer) {
     const local = v.getUint32(p + 42, true);
     const path = dec.decode(new Uint8Array(buffer, p + 46, nameLen));
     if (method !== 0) throw new Error('ZIP comprimido não suportado');
+    if (v.getUint32(local, true) !== 0x04034b50) throw invalid();
     const dataStart = local + 30 + v.getUint16(local + 26, true) + v.getUint16(local + 28, true);
-    out.push({ path, bytes: new Uint8Array(buffer.slice(dataStart, dataStart + size)) });
+    if (dataStart + size > eocd) throw invalid();
+    out.push({ path, bytes: new Uint8Array(buffer, dataStart, size) });
     p += 46 + nameLen + extraLen + commentLen;
   }
   return out;
