@@ -77,6 +77,35 @@ export function makeZip(entries) {
   return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
 }
 
+// Lê um ZIP criado por makeZip (sem compressão). Devolve [{ path, bytes }].
+export function readZip(buffer) {
+  const v = new DataView(buffer);
+  let eocd = -1;
+  for (let i = buffer.byteLength - 22; i >= Math.max(0, buffer.byteLength - 65557); i--) {
+    if (v.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('não é um ZIP');
+  const count = v.getUint16(eocd + 10, true);
+  let p = v.getUint32(eocd + 16, true);
+  const dec = new TextDecoder();
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    if (v.getUint32(p, true) !== 0x02014b50) throw new Error('ZIP inválido');
+    const method = v.getUint16(p + 10, true);
+    const size = v.getUint32(p + 20, true);
+    const nameLen = v.getUint16(p + 28, true);
+    const extraLen = v.getUint16(p + 30, true);
+    const commentLen = v.getUint16(p + 32, true);
+    const local = v.getUint32(p + 42, true);
+    const path = dec.decode(new Uint8Array(buffer, p + 46, nameLen));
+    if (method !== 0) throw new Error('ZIP comprimido não suportado');
+    const dataStart = local + 30 + v.getUint16(local + 26, true) + v.getUint16(local + 28, true);
+    out.push({ path, bytes: new Uint8Array(buffer.slice(dataStart, dataStart + size)) });
+    p += 46 + nameLen + extraLen + commentLen;
+  }
+  return out;
+}
+
 // pages: [{ bytes: Uint8Array (JPEG), width, height }] -> Blob PDF, uma página por imagem.
 export function makePdf(pages) {
   const A4_WIDTH = 595;

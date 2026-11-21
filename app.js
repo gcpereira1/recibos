@@ -1,4 +1,4 @@
-import { makeZip, makePdf } from './lib.js';
+import { makeZip, makePdf, readZip } from './lib.js';
 
 // ---------- utilitários ----------
 const $ = (id) => document.getElementById(id);
@@ -419,17 +419,25 @@ function startClose() {
   };
 }
 
-async function buildPackage(notes) {
+// Uma pasta por mês e, dentro, uma por projeto. Devolve as entradas do ZIP e o caminho de cada recibo.
+async function zipEntries(notes, prefix = '') {
   const used = new Set();
   const entries = [];
+  const paths = new Map();
   const sorted = [...notes].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   for (const n of sorted) {
-    const base = `${n.month}/${safeName(projectName(n.projectId))}/${n.stamp}`;
+    const base = `${prefix}${n.month}/${safeName(projectName(n.projectId))}/${n.stamp}`;
     let path = `${base}.${n.ext}`;
     for (let i = 2; used.has(path); i++) path = `${base}_${i}.${n.ext}`;
     used.add(path);
+    paths.set(n.id, path);
     entries.push({ path, bytes: new Uint8Array(await n.blob.arrayBuffer()), date: new Date(n.createdAt) });
   }
+  return { entries, paths };
+}
+
+async function buildPackage(notes) {
+  const { entries } = await zipEntries(notes);
   const months = [...new Set(notes.map((n) => n.month))].sort();
   const org = state.settings.org.trim();
   const range = months.length > 1 ? `${months[0]} a ${months.at(-1)}` : months[0];
@@ -514,6 +522,148 @@ async function deleteSentMonth(month) {
 
 $('close-action').onclick = startClose;
 
+// ---------- cópia de segurança (iCloud Drive ou outra pasta, escolhida na partilha) ----------
+const BACKUP_DATA = 'recibos-dados.json';
+const BACKUP_DAYS = 30;
+
+async function startBackup() {
+  if (!state.notes.length && !state.projects.length) { alert('Ainda não há recibos nem projetos para guardar.'); return; }
+  openModal('<h2>Cópia de segurança</h2><p class="muted">A preparar…</p>');
+  busy = true;
+  try {
+    const { entries, paths } = await zipEntries(state.notes);
+    const data = {
+      app: 'recibos',
+      version: 1,
+      createdAt: new Date().toISOString(),
+      settings: { person: state.settings.person, org: state.settings.org },
+      projects: state.projects,
+      notes: state.notes.map(({ blob, thumb, ...n }) => ({ ...n, path: paths.get(n.id) })),
+    };
+    entries.push({ path: BACKUP_DATA, bytes: new TextEncoder().encode(JSON.stringify(data, null, 1)) });
+    const file = new File([makeZip(entries)], `Copia recibos ${localStamp(new Date())}.zip`, { type: 'application/zip' });
+    busy = false;
+    showBackupShare(file);
+  } catch {
+    busy = false;
+    closeModal();
+    alert('Não foi possível criar a cópia. Tente outra vez.');
+  }
+}
+
+function showBackupShare(file) {
+  const canShare = !!navigator.canShare?.({ files: [file] });
+  $('dialog').innerHTML = `
+    <h2>Cópia pronta</h2>
+    <p class="muted">${esc(file.name)} · ${plural(state.notes.length, 'recibo', 'recibos')} · ${fmtSize(file.size)}</p>
+    <p class="note">${canShare
+      ? 'Toque em Partilhar, escolha "Guardar em Ficheiros" e depois a pasta no iCloud Drive (por exemplo, uma pasta "Recibos"). O iPhone lembra-se da última pasta usada.'
+      : 'O ZIP vai ser descarregado. Guarde-o numa pasta de cópias de segurança.'}</p>
+    <div class="row-actions"><button class="secondary" id="bk-cancel">Cancelar</button><button class="primary" id="bk-go">${canShare ? 'Partilhar' : 'Descarregar'}</button></div>`;
+  $('bk-cancel').onclick = closeModal;
+  $('bk-go').onclick = async () => {
+    if (canShare) {
+      try {
+        await navigator.share({ files: [file] });
+      } catch (err) {
+        if (err?.name === 'AbortError') return;
+        download(file);
+      }
+    } else {
+      download(file);
+    }
+    state.settings.lastBackup = new Date().toISOString();
+    await saveSettings();
+    closeModal();
+    toast('Cópia de segurança feita');
+    render();
+  };
+}
+
+const validNote = (n) => n && typeof n.id === 'string' && typeof n.path === 'string' && typeof n.createdAt === 'string'
+  && /^\d{4}-\d{2}$/.test(n.month) && typeof n.stamp === 'string' && (n.ext === 'jpg' || n.ext === 'pdf');
+
+async function restoreFrom(file) {
+  const notBackup = 'Este ficheiro não é uma cópia de segurança deste app.';
+  let items, data;
+  try {
+    items = readZip(await file.arrayBuffer());
+    const entry = items.find((i) => i.path === BACKUP_DATA);
+    data = entry && JSON.parse(new TextDecoder().decode(entry.bytes));
+  } catch {
+    alert(notBackup);
+    return;
+  }
+  if (!data || data.app !== 'recibos' || !Array.isArray(data.notes) || !Array.isArray(data.projects)) { alert(notBackup); return; }
+
+  // Projetos: se já existe um com o mesmo nome, os recibos passam a usar esse.
+  const idMap = new Map();
+  const newProjects = [];
+  for (const p of data.projects) {
+    if (!p || typeof p.id !== 'string' || typeof p.name !== 'string' || !p.name.trim()) continue;
+    const same = state.projects.find((x) => x.id === p.id || collator.compare(x.name, p.name) === 0)
+      || newProjects.find((x) => collator.compare(x.name, p.name) === 0);
+    if (same) { idMap.set(p.id, same.id); continue; }
+    const np = { id: p.id, name: p.name.trim().slice(0, 60), createdAt: p.createdAt || new Date().toISOString() };
+    newProjects.push(np);
+    idMap.set(p.id, np.id);
+  }
+  const byPath = new Map(items.map((i) => [i.path, i.bytes]));
+  const have = new Set(state.notes.map((n) => n.id));
+  const candidates = data.notes.filter((n) => validNote(n) && !have.has(n.id) && byPath.has(n.path));
+  if (!candidates.length && !newProjects.length) { alert('Esta cópia não tem nada que ainda não esteja neste telemóvel.'); return; }
+  if (!confirm(`Restaurar ${plural(candidates.length, 'recibo', 'recibos')} e ${plural(newProjects.length, 'projeto novo', 'projetos novos')}? O que já existe neste telemóvel fica como está.`)) return;
+
+  openModal('<h2>A restaurar…</h2><p class="muted">Não feche o app.</p>');
+  busy = true;
+  try {
+    const newNotes = [];
+    for (const n of candidates) {
+      const blob = new Blob([byPath.get(n.path)], { type: n.ext === 'jpg' ? 'image/jpeg' : 'application/pdf' });
+      let thumb = null;
+      if (n.ext === 'jpg') { try { thumb = (await toJpeg(blob, 240, 0.7)).blob; } catch {} }
+      newNotes.push({
+        id: n.id, createdAt: n.createdAt, month: n.month, stamp: n.stamp, ext: n.ext,
+        projectId: idMap.get(n.projectId) || n.projectId, pageCount: n.pageCount ?? null,
+        sentAt: typeof n.sentAt === 'string' ? n.sentAt : null, blob, thumb, size: blob.size,
+      });
+    }
+    // Recibos cujo projeto não veio na cópia ficam num projeto "Recuperados".
+    const known = new Set([...state.projects, ...newProjects].map((p) => p.id));
+    if (newNotes.some((n) => !known.has(n.projectId))) {
+      let rec = [...state.projects, ...newProjects].find((p) => collator.compare(p.name, 'Recuperados') === 0);
+      if (!rec) { rec = { id: uid(), name: 'Recuperados', createdAt: new Date().toISOString() }; newProjects.push(rec); }
+      newNotes.forEach((n) => { if (!known.has(n.projectId)) n.projectId = rec.id; });
+    }
+    await write('projects', (s) => newProjects.forEach((p) => s.put(p)));
+    await write('notes', (s) => newNotes.forEach((n) => s.put(n)));
+    if (!state.settings.person && !state.settings.org && data.settings) {
+      state.settings.person = String(data.settings.person || '').slice(0, 60);
+      state.settings.org = String(data.settings.org || '').slice(0, 60);
+      await saveSettings();
+    }
+    await load();
+    busy = false;
+    closeModal();
+    toast(`${plural(newNotes.length, 'recibo restaurado', 'recibos restaurados')}`);
+    render();
+  } catch (err) {
+    busy = false;
+    closeModal();
+    alert(`Não foi possível restaurar. ${err?.name === 'QuotaExceededError' ? 'O armazenamento está cheio.' : 'Tente outra vez.'}`);
+  }
+}
+
+$('backup-action').onclick = startBackup;
+$('restore-action').onclick = () => $('restore-input').click();
+$('restore-input').onchange = (e) => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (f) restoreFrom(f);
+};
+const backupDue = () => state.notes.length > 0
+  && (!state.settings.lastBackup || Date.now() - new Date(state.settings.lastBackup).getTime() > BACKUP_DAYS * 864e5);
+
 // ---------- ecrãs ----------
 function noteRow(n) {
   const t = thumbUrl(n);
@@ -576,6 +726,7 @@ function renderHome() {
   $('pending-count').textContent = plural(pending.length, 'recibo', 'recibos');
   $('pending-detail').textContent = groupByMonth(pending).map(([m, ns]) => `${monthLabel(m)}: ${ns.length}`).join(' · ');
   $('close-action').disabled = !pending.length;
+  $('backup-hint').classList.toggle('hidden', !backupDue());
 }
 
 function renderHeader() {
@@ -593,6 +744,9 @@ async function renderSettings() {
   try { persisted = await navigator.storage?.persisted?.(); } catch {}
   $('storage-info').textContent = `${plural(state.notes.length, 'recibo', 'recibos')} guardados, ${fmtSize(total)}.`
     + (persisted === true ? ' Armazenamento protegido.' : persisted === false ? ' Armazenamento ainda não protegido: instale o app no ecrã principal.' : '');
+  $('backup-info').textContent = state.settings.lastBackup
+    ? `Última cópia: ${fmtDateTime(state.settings.lastBackup)}.`
+    : 'Ainda não fez nenhuma cópia.';
 }
 
 $('settings-form').onsubmit = async (e) => {

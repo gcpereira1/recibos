@@ -38,6 +38,9 @@
     <div class="notice hidden" id="install-hint">
       Para não perder recibos, instale o app: no Safari, toque em <b>Partilhar</b> e depois em <b>Adicionar ao ecrã principal</b>.
     </div>
+    <div class="notice hidden" id="backup-hint">
+      Há mais de 30 dias sem cópia de segurança. <button class="text-button" data-go="ajustes">Fazer cópia agora</button>
+    </div>
     <div class="action-grid">
       <button class="action" id="photo-action"><svg><use href="#i-camera"/></svg><span><strong>Fotografar recibo</strong><small>Uma ou mais páginas</small></span></button>
       <button class="action" id="file-action"><svg><use href="#i-file"/></svg><span><strong>Carregar ficheiro</strong><small>PDF ou fotos guardadas</small></span></button>
@@ -79,7 +82,14 @@
     <div class="box">
       <div class="section-head"><h2>Armazenamento</h2></div>
       <p class="muted" id="storage-info">A calcular…</p>
-      <p class="note">Os recibos ficam só neste telemóvel. O ZIP enviado em cada fecho é também a sua cópia de segurança.</p>
+      <p class="note">Os recibos ficam só neste telemóvel, até fazer uma cópia de segurança.</p>
+    </div>
+    <div class="box">
+      <div class="section-head"><h2>Cópia de segurança</h2></div>
+      <p class="muted" id="backup-info">Ainda não fez nenhuma cópia.</p>
+      <p class="note">Guarda todos os recibos e projetos num ZIP. No ecrã de partilha escolha "Guardar em Ficheiros" e uma pasta do iCloud Drive. Para recuperar, por exemplo num telemóvel novo, use "Restaurar cópia".</p>
+      <button class="primary wide" id="backup-action">Fazer cópia de segurança</button>
+      <button class="secondary wide" id="restore-action">Restaurar cópia</button>
     </div>
   </section>
 </div>
@@ -95,6 +105,7 @@
 
 <input id="photo-input" type="file" accept="image/*" capture="environment" class="hidden">
 <input id="file-input" type="file" accept="image/*,application/pdf,.pdf" multiple class="hidden">
+<input id="restore-input" type="file" accept=".zip,application/zip" class="hidden">
 
 <div class="modal hidden" id="modal" role="dialog" aria-modal="true">
   <div class="dialog" id="dialog"></div>
