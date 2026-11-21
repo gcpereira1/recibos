@@ -216,3 +216,9 @@ svg { fill: currentColor; }
 .cds--modal-footer .cds--btn { display: flex; padding: 0 1rem; max-inline-size: none; }
 /* Campos dentro da janela: brancos, para se distinguirem do fundo cinzento. */
 .cds--modal .cds--select-input, .cds--modal .cds--text-input { background-color: #ffffff; }
+
+/* O Carbon usa 100vh, que no iPhone pode ser mais alto do que o ecrã visível e cortar os botões de baixo. */
+.cds--modal { block-size: 100%; inset: 0; inline-size: 100%; }
+@supports (height: 100dvh) { .cds--modal { block-size: 100dvh; } }
+.cds--modal-footer { block-size: auto; min-block-size: 4rem; }
+.cds--modal-footer .cds--btn { min-block-size: 4rem; block-size: auto; }
