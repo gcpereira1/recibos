@@ -508,26 +508,17 @@ async function zipEntries(notes) {
   return { entries, paths };
 }
 
+// O Outlook usa o nome do ficheiro como assunto e junta as linhas do texto numa só,
+// por isso o nome é o assunto e o texto é uma frase curta.
 async function buildPackage(notes) {
   const { entries } = await zipEntries(notes);
   const months = [...new Set(notes.map((n) => n.month))].sort();
   const org = state.settings.org.trim();
-  const range = months.length > 1 ? `${months[0]} a ${months.at(-1)}` : months[0];
-  const fileName = `${safeName(`Recibos${org ? ` ${org}` : ''} ${range}`)}.zip`;
-  const monthsText = months.map(monthLabel).join(', ');
-  const subject = `Recibos${org ? ` ${org}` : ''}, ${monthsText}`;
-  const lines = ['Olá,', '', `Seguem em anexo os recibos${org ? ` de ${org}` : ''} de ${monthsText}.`, ''];
-  for (const [m, ns] of groupByMonth(notes).reverse()) {
-    lines.push(monthLabel(m));
-    const perProject = new Map();
-    ns.forEach((n) => perProject.set(projectName(n.projectId), (perProject.get(projectName(n.projectId)) || 0) + 1));
-    [...perProject.entries()].sort((a, b) => collator.compare(a[0], b[0])).forEach(([p, c]) => lines.push(`- ${p}: ${c}`));
-    lines.push('');
-  }
-  lines.push(`Total: ${plural(notes.length, 'recibo', 'recibos')}.`);
-  if (state.settings.person.trim()) lines.push('', state.settings.person.trim());
-  const file = new File([makeZip(entries)], fileName, { type: 'application/zip' });
-  return { file, subject, body: lines.join('\n') };
+  const period = months.length > 1 ? `${monthLabel(months[0])} a ${monthLabel(months.at(-1))}` : monthLabel(months[0]);
+  const subject = `Recibos${org ? ` ${org}` : ''}, ${period}`;
+  const body = `Olá, seguem em anexo ${notes.length === 1 ? 'o recibo' : `os ${notes.length} recibos`} de ${period}, organizados por projeto.`;
+  const file = new File([makeZip(entries)], `${safeName(subject)}.zip`, { type: 'application/zip' });
+  return { file, subject, body };
 }
 
 // A partilha tem de ser chamada logo a seguir a um toque, por isso o ZIP é preparado antes.
