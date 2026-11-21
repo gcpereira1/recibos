@@ -1,5 +1,5 @@
 // Funciona sem internet: tenta a rede primeiro (para receber atualizações) e usa a cópia guardada se falhar.
-const CACHE = 'recibos-v15';
+const CACHE = 'recibos-v16';
 const ASSETS = ['./', './index.html', './app.js', './lib.js', './carbon.css', './app.css', './fonts/IBMPlexSans-Regular-Latin1.woff2', './fonts/IBMPlexSans-SemiBold-Latin1.woff2', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {

@@ -20,7 +20,7 @@ const safeName = (s) => String(s).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').tri
 const icon = (name, cls = '') => `<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const kindOf = (n) => (n.ext === 'jpg' ? 'Foto' : n.pageCount ? `PDF, ${n.pageCount} páginas` : 'PDF');
 const MAIL_LIMIT = 20e6; // limite prudente para anexos de e-mail
-const APP_VERSION = '15'; // igual ao número em CACHE no sw.js
+const APP_VERSION = '16'; // igual ao número em CACHE no sw.js
 
 // ---------- componentes Carbon (HTML) ----------
 function textField(id, label, value = '', { hint = '', placeholder = '', autocomplete = 'off' } = {}) {
@@ -999,6 +999,7 @@ $('update-action').onclick = async () => {
     const keys = await caches.keys();
     await Promise.all(keys.map((k) => caches.delete(k)));
   } catch {}
+  try { sessionStorage.setItem('recibos-updated', '1'); } catch {}
   location.reload();
 };
 $('app-version').textContent = `Versão ${APP_VERSION}`;
@@ -1031,5 +1032,9 @@ function render() {
   }
   render();
   if (needsOnboarding()) showOnboarding();
+  // Depois de "Atualizar app": volta a Ajustes e confirma com o visto.
+  let updated = false;
+  try { updated = sessionStorage.getItem('recibos-updated') === '1'; sessionStorage.removeItem('recibos-updated'); } catch {}
+  if (updated) { go('ajustes'); check(); }
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
 })();
