@@ -170,13 +170,18 @@ let onModalClose = null;
 let busy = false; // enquanto processa fotos ou guarda, a janela não fecha
 const modalOpen = () => $('modal').classList.contains('is-visible');
 
+// Com a janela aberta, o leitor de ecrã e o teclado não chegam ao que está por trás.
+function setBackgroundInert(on) {
+  document.querySelectorAll('.app-main, .tabbar').forEach((el) => { el.inert = on; });
+}
+
 // spec: { title, label?, body, actions: [{ id, label, kind }], closable? }
 function setModal(spec) {
   const actions = spec.actions || [];
   $('modal-container').innerHTML = `
     <div class="cds--modal-header">
       ${spec.label ? `<p class="cds--modal-header__label">${esc(spec.label)}</p>` : ''}
-      <h2 class="cds--modal-header__heading" id="modal-title">${esc(spec.title)}</h2>
+      <h2 class="cds--modal-header__heading" id="modal-title" tabindex="-1">${esc(spec.title)}</h2>
       ${spec.closable === false ? '' : `<div class="cds--modal-close-button"><button class="cds--modal-close" type="button" data-modal-close aria-label="Fechar">${icon('close', 'cds--modal-close__icon')}</button></div>`}
     </div>
     <div class="cds--modal-content">${spec.body || ''}</div>
@@ -187,11 +192,13 @@ function openModal(spec, onClose) {
   onModalClose = onClose || null;
   $('modal').classList.add('is-visible');
   document.body.classList.add('cds--body--with-modal-open');
+  setBackgroundInert(true);
   $('modal-title')?.focus?.();
 }
 function closeModal() {
   $('modal').classList.remove('is-visible');
   document.body.classList.remove('cds--body--with-modal-open');
+  setBackgroundInert(false);
   $('modal-container').innerHTML = '';
   const fn = onModalClose;
   onModalClose = null;
@@ -809,6 +816,7 @@ function showOnboarding() {
   ob.step = 0;
   $('onboarding').hidden = false;
   document.body.classList.add('cds--body--with-modal-open');
+  setBackgroundInert(true);
   renderOnboarding();
 }
 async function finishOnboarding() {
@@ -816,6 +824,7 @@ async function finishOnboarding() {
   await saveSettings();
   $('onboarding').hidden = true;
   document.body.classList.remove('cds--body--with-modal-open');
+  setBackgroundInert(false);
   render();
   typeHello();
 }
