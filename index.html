@@ -40,17 +40,14 @@
   <symbol id="i-edit" viewBox="0 0 32 32"><path d="M2 26H30V28H2z"/><path d="M25.4,9c0.8-0.8,0.8-2,0-2.8c0,0,0,0,0,0l-3.6-3.6c-0.8-0.8-2-0.8-2.8,0c0,0,0,0,0,0l-15,15V24h6.4L25.4,9z M20.4,4L24,7.6	l-3,3L17.4,7L20.4,4z M6,22v-3.6l10-10l3.6,3.6l-10,10H6z"/></symbol>
   <symbol id="i-user" viewBox="0 0 32 32"><path d="M16,4a5,5,0,1,1-5,5,5,5,0,0,1,5-5m0-2a7,7,0,1,0,7,7A7,7,0,0,0,16,2Z"/><path d="M26,30H24V25a5,5,0,0,0-5-5H13a5,5,0,0,0-5,5v5H6V25a7,7,0,0,1,7-7h6a7,7,0,0,1,7,7Z"/></symbol>
   <symbol id="i-arrow-right" viewBox="0 0 32 32"><path d="M18 6 16.57 7.393 24.15 15 4 15 4 17 24.15 17 16.57 24.573 18 26 28 16 18 6z"/></symbol>
+  <symbol id="i-ios-share" viewBox="0 0 32 32"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 12H8v16h16V12h-3"/><path d="M16 4v16"/><path d="M11 9l5-5 5 5"/></g></symbol>
 </svg>
 <!-- icons:end -->
 
-<header class="app-header">
-  <span class="app-header__name" id="brand">Recibos</span>
-</header>
 
 <main class="app-main">
   <section class="page is-active" id="inicio" aria-labelledby="hello">
     <h1 class="title" id="hello">Olá.</h1>
-    <p class="lead" id="hello-sub">Fotografe cada recibo na hora da compra.</p>
     <div id="home-notices"></div>
     <div class="stack">
       <button class="cds--btn cds--btn--primary cds--btn--xl cds--layout--size-xl full" id="photo-action">
@@ -61,10 +58,9 @@
       </button>
     </div>
     <div class="cds--tile pending-tile">
-      <p class="label">Por enviar</p>
-      <p class="count" id="pending-count">0</p>
-      <p class="muted" id="pending-detail">Ainda não há recibos.</p>
-      <button class="cds--btn cds--btn--secondary cds--btn--xl cds--layout--size-xl full" id="close-action">
+      <div class="pending-row"><span class="label">Por enviar</span><span class="count" id="pending-count">0</span></div>
+      <p class="muted" id="pending-detail"></p>
+      <button class="cds--btn cds--btn--tertiary cds--btn--xl cds--layout--size-xl full" id="close-action">
         Fechar o mês e enviar<svg class="cds--btn__icon" aria-hidden="true"><use href="#i-send"/></svg>
       </button>
     </div>
@@ -81,7 +77,6 @@
 
   <section class="page" id="projetos" aria-labelledby="projetos-title">
     <h1 class="title" id="projetos-title">Projetos</h1>
-    <p class="lead">Cada recibo fica num projeto. Toque num projeto para mudar o nome ou eliminar.</p>
     <form id="add-project-form" class="stack">
       <div class="cds--form-item cds--text-input-wrapper">
         <label for="new-project" class="cds--label">Novo projeto</label>
@@ -108,7 +103,6 @@
         <div class="cds--text-input__field-outer-wrapper"><div class="cds--text-input__field-wrapper">
           <input id="set-org" class="cds--text-input cds--text-input--lg cds--layout--size-lg" type="text" maxlength="60" autocomplete="organization">
         </div></div>
-        <div class="cds--form__helper-text">Aparece no título, no assunto do e-mail e no nome do ZIP.</div>
       </div>
       <button class="cds--btn cds--btn--primary cds--btn--xl cds--layout--size-xl full" type="submit">Guardar</button>
     </form>
@@ -116,16 +110,10 @@
     <div class="cds--tile section-tile">
       <h2 class="subtitle">Cópia de segurança</h2>
       <p class="muted" id="backup-info">Ainda não fez nenhuma cópia.</p>
-      <p class="body">Guarda todos os recibos e projetos num ZIP. No ecrã de partilha escolha <b>Guardar em Ficheiros</b> e uma pasta do iCloud Drive. Num telemóvel novo, use <b>Restaurar cópia</b>.</p>
       <div class="stack">
-        <button class="cds--btn cds--btn--primary cds--btn--xl cds--layout--size-xl full" id="backup-action">Fazer cópia de segurança<svg class="cds--btn__icon" aria-hidden="true"><use href="#i-folder"/></svg></button>
+        <button class="cds--btn cds--btn--primary cds--btn--xl cds--layout--size-xl full" id="backup-action">Guardar cópia<svg class="cds--btn__icon" aria-hidden="true"><use href="#i-folder"/></svg></button>
         <button class="cds--btn cds--btn--tertiary cds--btn--xl cds--layout--size-xl full" id="restore-action">Restaurar cópia<svg class="cds--btn__icon" aria-hidden="true"><use href="#i-renew"/></svg></button>
       </div>
-    </div>
-
-    <div class="cds--tile section-tile">
-      <h2 class="subtitle">Armazenamento</h2>
-      <p class="muted" id="storage-info">A calcular…</p>
     </div>
   </section>
 </main>
@@ -144,6 +132,8 @@
 <div class="cds--modal" id="modal" role="presentation">
   <div class="cds--modal-container cds--modal-container--sm" role="dialog" aria-modal="true" aria-labelledby="modal-title" id="modal-container"></div>
 </div>
+
+<div class="onboarding" id="onboarding" hidden></div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 

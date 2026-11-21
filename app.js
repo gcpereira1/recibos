@@ -262,9 +262,7 @@ function projectOptions(selected, withNew) {
 
 function renderCapture(status) {
   const d = draft;
-  const kind = d.pdf
-    ? `PDF: ${d.pdfName}`
-    : d.pages.length > 1 ? `${d.pages.length} páginas. Vão ser juntas num só PDF.` : d.pages.length ? '1 página. Se o recibo tiver mais, adicione as outras.' : '';
+  const kind = d.pdf ? d.pdfName : plural(d.pages.length, 'página', 'páginas');
   const thumbs = d.pdf
     ? `<div class="page-thumb"><div class="doc">${icon('document-pdf')}</div></div>`
     : d.pages.map((p, i) => `<div class="page-thumb"><img src="${p.url}" alt="Página ${i + 1}"><button type="button" data-remove-page="${i}" aria-label="Remover página ${i + 1}">${icon('close')}</button></div>`).join('')
@@ -461,16 +459,16 @@ function startClose() {
   const total = pending.reduce((s, n) => s + n.size, 0);
   const tooBig = total > MAIL_LIMIT;
   openModal({
-    title: 'Fechar e enviar',
-    body: `<p>${plural(pending.length, 'recibo', 'recibos')} por enviar (${fmtSize(total)}). Vai ser criado um ZIP com uma pasta por mês e, dentro, uma por projeto.</p>
-      ${tooBig ? notification('warning', 'ZIP grande', 'Pode não caber num só e-mail. Escolha os meses a enviar agora e envie os restantes noutro e-mail.') : ''}
+    title: 'Fechar o mês',
+    body: `<p>${plural(pending.length, 'recibo', 'recibos')} · ${fmtSize(total)}</p>
+      ${tooBig ? notification('warning', 'Grande demais para um e-mail', 'Escolha os meses a enviar agora.') : ''}
       <fieldset class="cds--fieldset" id="close-months" ${tooBig ? '' : 'hidden'}>
         ${months.map(([m, ns], i) => `<div class="cds--checkbox-wrapper"><input type="checkbox" class="cds--checkbox" id="cm-${i}" value="${m}" checked><label for="cm-${i}" class="cds--checkbox-label"><span class="cds--checkbox-label-text">${monthLabel(m)}: ${plural(ns.length, 'recibo', 'recibos')}, ${fmtSize(ns.reduce((s, n) => s + n.size, 0))}</span></label></div>`).join('')}
       </fieldset>
-      <p class="muted">No ecrã seguinte escolha o Outlook e a pessoa a quem envia.</p>`,
+`,
     actions: [
       { id: 'close-cancel', label: 'Cancelar', kind: 'secondary' },
-      { id: 'close-go', label: 'Preparar ZIP', kind: 'primary' },
+      { id: 'close-go', label: 'Continuar', kind: 'primary' },
     ],
   });
   $('close-cancel').onclick = closeModal;
@@ -536,12 +534,11 @@ async function buildPackage(notes) {
 function showShare(pkg, notes) {
   const canShare = !!navigator.canShare?.({ files: [pkg.file] });
   setModal({
-    title: 'ZIP pronto',
-    body: `<p class="muted">${esc(pkg.file.name)} · ${plural(notes.length, 'recibo', 'recibos')} · ${fmtSize(pkg.file.size)}</p>
-      <p>${canShare ? 'Toque em <b>Partilhar</b>, escolha o Outlook e a pessoa a quem envia, e envie.' : 'Este navegador não partilha ficheiros. O ZIP vai ser descarregado para anexar ao e-mail.'}</p>`,
+    title: 'Pronto para enviar',
+    body: `<p class="muted">${esc(pkg.file.name)} · ${fmtSize(pkg.file.size)}</p>`,
     actions: [
       { id: 'share-cancel', label: 'Cancelar', kind: 'secondary' },
-      { id: 'share-go', label: canShare ? 'Partilhar' : 'Descarregar', kind: 'primary' },
+      { id: 'share-go', label: canShare ? 'Enviar por e-mail' : 'Descarregar', kind: 'primary' },
     ],
   });
   $('share-cancel').onclick = closeModal;
@@ -572,13 +569,12 @@ function download(file) {
 }
 
 function askSent(notes) {
-  const one = notes.length === 1;
   setModal({
     title: 'O e-mail foi enviado?',
-    body: `<p>Se sim, ${one ? 'o recibo passa' : `os ${notes.length} recibos passam`} para "Enviados" e não volta${one ? '' : 'm'} a entrar no próximo fecho.</p>`,
+    body: '',
     actions: [
       { id: 'sent-no', label: 'Ainda não', kind: 'secondary' },
-      { id: 'sent-yes', label: 'Sim, foi enviado', kind: 'primary' },
+      { id: 'sent-yes', label: 'Sim', kind: 'primary' },
     ],
   });
   $('sent-no').onclick = closeModal;
@@ -610,22 +606,42 @@ $('close-action').onclick = startClose;
 const BACKUP_DATA = 'recibos-dados.json';
 const BACKUP_DAYS = 30;
 
+async function buildBackupFile() {
+  const { entries, paths } = await zipEntries(state.notes);
+  const data = {
+    app: 'recibos',
+    version: 1,
+    createdAt: new Date().toISOString(),
+    settings: { person: state.settings.person, org: state.settings.org },
+    projects: state.projects,
+    notes: state.notes.map(({ blob, thumb, ...n }) => ({ ...n, path: paths.get(n.id) })),
+  };
+  entries.push({ path: BACKUP_DATA, bytes: new TextEncoder().encode(JSON.stringify(data, null, 1)) });
+  return new File([makeZip(entries)], `Copia recibos ${localStamp(new Date())}.zip`, { type: 'application/zip' });
+}
+
+// Partilha a cópia (Guardar em Ficheiros). Devolve true se foi guardada ou descarregada.
+async function shareBackup(file) {
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file] });
+    } catch (err) {
+      if (err?.name === 'AbortError') return false;
+      download(file);
+    }
+  } else {
+    download(file);
+  }
+  state.settings.lastBackup = new Date().toISOString();
+  await saveSettings();
+  return true;
+}
+
 async function startBackup() {
-  if (!state.notes.length && !state.projects.length) { alert('Ainda não há recibos nem projetos para guardar.'); return; }
   openModal({ title: 'Cópia de segurança', body: '<p class="muted">A preparar…</p>', closable: false });
   busy = true;
   try {
-    const { entries, paths } = await zipEntries(state.notes);
-    const data = {
-      app: 'recibos',
-      version: 1,
-      createdAt: new Date().toISOString(),
-      settings: { person: state.settings.person, org: state.settings.org },
-      projects: state.projects,
-      notes: state.notes.map(({ blob, thumb, ...n }) => ({ ...n, path: paths.get(n.id) })),
-    };
-    entries.push({ path: BACKUP_DATA, bytes: new TextEncoder().encode(JSON.stringify(data, null, 1)) });
-    const file = new File([makeZip(entries)], `Copia recibos ${localStamp(new Date())}.zip`, { type: 'application/zip' });
+    const file = await buildBackupFile();
     busy = false;
     showBackupShare(file);
   } catch {
@@ -639,29 +655,15 @@ function showBackupShare(file) {
   const canShare = !!navigator.canShare?.({ files: [file] });
   setModal({
     title: 'Cópia pronta',
-    body: `<p class="muted">${esc(file.name)} · ${plural(state.notes.length, 'recibo', 'recibos')} · ${fmtSize(file.size)}</p>
-      <p>${canShare
-        ? 'Toque em <b>Partilhar</b>, escolha <b>Guardar em Ficheiros</b> e depois a pasta no iCloud Drive (por exemplo, uma pasta "Recibos"). O iPhone lembra-se da última pasta usada.'
-        : 'O ZIP vai ser descarregado. Guarde-o numa pasta de cópias de segurança.'}</p>`,
+    body: `<p class="muted">${plural(state.notes.length, 'recibo', 'recibos')} · ${fmtSize(file.size)}</p>`,
     actions: [
       { id: 'bk-cancel', label: 'Cancelar', kind: 'secondary' },
-      { id: 'bk-go', label: canShare ? 'Partilhar' : 'Descarregar', kind: 'primary' },
+      { id: 'bk-go', label: canShare ? 'Guardar em Ficheiros' : 'Descarregar', kind: 'primary' },
     ],
   });
   $('bk-cancel').onclick = closeModal;
   $('bk-go').onclick = async () => {
-    if (canShare) {
-      try {
-        await navigator.share({ files: [file] });
-      } catch (err) {
-        if (err?.name === 'AbortError') return;
-        download(file);
-      }
-    } else {
-      download(file);
-    }
-    state.settings.lastBackup = new Date().toISOString();
-    await saveSettings();
+    if (!(await shareBackup(file))) return;
     closeModal();
     toast('Cópia de segurança feita');
     render();
@@ -752,6 +754,103 @@ $('restore-input').onchange = (e) => {
 const backupDue = () => state.notes.length > 0
   && (!state.settings.lastBackup || Date.now() - new Date(state.settings.lastBackup).getTime() > BACKUP_DAYS * 864e5);
 
+// ---------- primeira abertura ----------
+const ob = { step: 0, backup: null };
+const needsOnboarding = () => !state.settings.onboarded && !state.settings.person && !state.settings.org && !state.notes.length;
+const obSteps = () => [...(isIOS() && !isStandalone() ? ['install'] : []), 'who', 'projects', 'backup'];
+
+function showOnboarding() {
+  ob.step = 0;
+  $('onboarding').hidden = false;
+  document.body.classList.add('cds--body--with-modal-open');
+  renderOnboarding();
+}
+async function finishOnboarding() {
+  state.settings.onboarded = true;
+  await saveSettings();
+  $('onboarding').hidden = true;
+  document.body.classList.remove('cds--body--with-modal-open');
+  render();
+}
+function nextStep() { ob.step++; renderOnboarding(); }
+
+function renderOnboarding() {
+  const steps = obSteps();
+  const key = steps[ob.step];
+  if (!key) { finishOnboarding(); return; }
+  const count = `${ob.step + 1} de ${steps.length}`;
+  let body = '';
+  let actions = '';
+  if (key === 'install') {
+    body = `<h1 class="title">Adicione ao ecrã principal</h1>
+      <ol class="ob-list">
+        <li>Toque em ${icon('ios-share', 'inline-ico')} <b>Partilhar</b> no Safari</li>
+        <li>Toque em <b>Adicionar ao ecrã principal</b></li>
+        <li>Abra o app pelo ícone novo</li>
+      </ol>`;
+    actions = `<button type="button" class="cds--btn cds--btn--tertiary cds--btn--xl cds--layout--size-xl full" id="ob-skip">Continuar no Safari</button>`;
+  } else if (key === 'who') {
+    body = `<h1 class="title">Como se chama?</h1>
+      ${textField('ob-person', 'O seu nome', state.settings.person, { autocomplete: 'name' })}
+      ${textField('ob-org', 'Organização', state.settings.org, { autocomplete: 'organization' })}`;
+    actions = `<button type="button" class="cds--btn cds--btn--primary cds--btn--xl cds--layout--size-xl full" id="ob-next">Continuar</button>`;
+  } else if (key === 'projects') {
+    body = `<h1 class="title">Em que projetos trabalha?</h1>
+      <div class="ob-add">
+        ${textField('ob-project', 'Nome do projeto', '', { placeholder: 'Ex.: Obra Rua Augusta' })}
+        <button type="button" class="cds--btn cds--btn--tertiary cds--btn--xl cds--layout--size-xl full" id="ob-add">Adicionar${icon('add', 'cds--btn__icon')}</button>
+      </div>
+      ${state.projects.length ? `<ul class="ob-projects">${state.projects.map((p) => `<li>${icon('checkmark')}${esc(p.name)}</li>`).join('')}</ul>` : ''}`;
+    actions = `<button type="button" class="cds--btn cds--btn--primary cds--btn--xl cds--layout--size-xl full" id="ob-next">${state.projects.length ? 'Continuar' : 'Saltar'}</button>`;
+  } else if (key === 'backup') {
+    body = `<h1 class="title">Onde guardar as cópias de segurança?</h1>
+      <p class="lead-plain">Escolha uma pasta no iCloud Drive.</p>`;
+    actions = `<button type="button" class="cds--btn cds--btn--primary cds--btn--xl cds--layout--size-xl full" id="ob-backup" disabled>A preparar…</button>
+      <button type="button" class="cds--btn cds--btn--tertiary cds--btn--xl cds--layout--size-xl full" id="ob-later">Agora não</button>`;
+  }
+  $('onboarding').innerHTML = `<div class="ob-inner">
+    <div class="ob-body"><p class="label">${count}</p>${body}</div>
+    <div class="ob-actions">${actions}</div>
+  </div>`;
+  $('onboarding').scrollTop = 0;
+
+  $('ob-skip')?.addEventListener('click', nextStep);
+  if (key === 'who') {
+    $('ob-person').focus();
+    $('ob-next').onclick = async () => {
+      const person = $('ob-person').value.trim();
+      if (!person) { alert('Escreva o seu nome.'); $('ob-person').focus(); return; }
+      state.settings.person = person;
+      state.settings.org = $('ob-org').value.trim();
+      await saveSettings();
+      nextStep();
+    };
+  }
+  if (key === 'projects') {
+    const add = async () => {
+      if (await createProject($('ob-project').value)) renderOnboarding();
+      $('ob-project')?.focus();
+    };
+    $('ob-add').onclick = add;
+    $('ob-project').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } };
+    $('ob-next').onclick = nextStep;
+  }
+  if (key === 'backup') {
+    $('ob-later').onclick = finishOnboarding;
+    // O ficheiro é preparado antes: a partilha tem de vir logo a seguir ao toque.
+    buildBackupFile().then((file) => {
+      ob.backup = file;
+      const b = $('ob-backup');
+      if (!b) return;
+      b.disabled = false;
+      b.textContent = 'Escolher pasta';
+      b.onclick = async () => {
+        if (await shareBackup(ob.backup)) finishOnboarding();
+      };
+    }).catch(() => finishOnboarding());
+  }
+}
+
 // ---------- ecrãs ----------
 function noteItem(n) {
   const t = thumbUrl(n);
@@ -829,44 +928,34 @@ function isIOS() {
 function renderHome() {
   const { person, org } = state.settings;
   $('hello').textContent = person.trim() ? `Olá, ${person.trim()}.` : 'Olá.';
-  $('hello-sub').textContent = 'Fotografe cada recibo na hora da compra.';
   const notices = [];
   if (isIOS() && !isStandalone()) {
-    notices.push(notification('warning', 'Instale o app', 'No Safari, toque em <b>Partilhar</b> e depois em <b>Adicionar ao ecrã principal</b>. Sem isto, o iPhone pode apagar os recibos.'));
-  }
-  if (!person.trim() && !org.trim()) {
-    notices.push(notification('info', 'Falta o seu nome', 'Escreva o seu nome e a organização em Ajustes.', `<div class="notice-action"><button type="button" class="cds--btn cds--btn--tertiary cds--btn--md cds--layout--size-md" data-go="ajustes">Abrir Ajustes</button></div>`));
+    notices.push(notification('warning', 'Adicione ao ecrã principal', `${icon('ios-share', 'inline-ico')} <b>Partilhar</b> › <b>Adicionar ao ecrã principal</b>`));
   }
   if (backupDue()) {
-    notices.push(notification('warning', 'Faça uma cópia de segurança', `Há mais de ${BACKUP_DAYS} dias sem cópia no iCloud.`, `<div class="notice-action"><button type="button" class="cds--btn cds--btn--tertiary cds--btn--md cds--layout--size-md" data-go="ajustes">Fazer cópia</button></div>`));
+    notices.push(notification('warning', 'Cópia de segurança em atraso', '', `<div class="notice-action"><button type="button" class="cds--btn cds--btn--tertiary cds--btn--lg cds--layout--size-lg" id="notice-backup">Guardar cópia</button></div>`));
   }
   $('home-notices').innerHTML = notices.join('');
   $('home-notices').hidden = !notices.length;
+  $('notice-backup')?.addEventListener('click', startBackup);
   const pending = pendingNotes();
   $('pending-count').textContent = String(pending.length);
-  $('pending-detail').textContent = pending.length
-    ? groupByMonth(pending).map(([m, ns]) => `${monthLabel(m)}: ${ns.length}`).join(' · ')
-    : 'Ainda não há recibos por enviar.';
+  $('pending-detail').textContent = groupByMonth(pending).map(([m, ns]) => `${monthLabel(m)}: ${ns.length}`).join(' · ');
+  $('pending-detail').hidden = !pending.length;
   $('close-action').disabled = !pending.length;
 }
 
 function renderHeader() {
   const org = state.settings.org.trim();
-  $('brand').textContent = org ? `Recibos · ${org}` : 'Recibos';
   document.title = org ? `Recibos ${org}` : 'Recibos';
 }
 
-async function renderSettings() {
+function renderSettings() {
   if (document.activeElement?.id !== 'set-person') $('set-person').value = state.settings.person;
   if (document.activeElement?.id !== 'set-org') $('set-org').value = state.settings.org;
   $('backup-info').textContent = state.settings.lastBackup
-    ? `Última cópia: ${fmtDateTime(state.settings.lastBackup)}.`
-    : 'Ainda não fez nenhuma cópia.';
-  const total = state.notes.reduce((s, n) => s + n.size, 0);
-  let persisted = null;
-  try { persisted = await navigator.storage?.persisted?.(); } catch {}
-  $('storage-info').textContent = `${plural(state.notes.length, 'recibo', 'recibos')} neste telemóvel, ${fmtSize(total)}.`
-    + (persisted === true ? ' Armazenamento protegido.' : persisted === false ? ' Armazenamento ainda não protegido: instale o app no ecrã principal.' : '');
+    ? `Última cópia: ${fmtDateTime(state.settings.lastBackup)}`
+    : 'Ainda sem cópia';
 }
 
 $('settings-form').onsubmit = async (e) => {
@@ -896,5 +985,6 @@ function render() {
     return;
   }
   render();
+  if (needsOnboarding()) showOnboarding();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
 })();
