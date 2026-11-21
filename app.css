@@ -2,6 +2,8 @@
 
 /* Escala: 1rem = 18px. Todo o Carbon usa rem, por isso texto, campos e botões crescem por igual. */
 html { font-size: 112.5%; -webkit-text-size-adjust: 100%; }
+/* Sem zoom com dois toques (o zoom com dois dedos continua possível, para quem precisa). */
+html, body, button, a, input, select, label { touch-action: manipulation; }
 
 /* Monocromático: o azul do Carbon passa a preto, e as cores de estado a cinzentos. */
 :root {
