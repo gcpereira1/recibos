@@ -617,7 +617,7 @@ async function buildBackupFile() {
     notes: state.notes.map(({ blob, thumb, ...n }) => ({ ...n, path: paths.get(n.id) })),
   };
   entries.push({ path: BACKUP_DATA, bytes: new TextEncoder().encode(JSON.stringify(data, null, 1)) });
-  return new File([makeZip(entries)], `Copia recibos ${localStamp(new Date())}.zip`, { type: 'application/zip' });
+  return new File([makeZip(entries)], 'Recibos.zip', { type: 'application/zip' });
 }
 
 // Partilha a cópia (Guardar em Ficheiros). Devolve true se foi guardada ou descarregada.
