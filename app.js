@@ -20,7 +20,7 @@ const safeName = (s) => String(s).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').tri
 const icon = (name, cls = '') => `<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const kindOf = (n) => (n.ext === 'jpg' ? 'Foto' : n.pageCount ? `PDF, ${n.pageCount} páginas` : 'PDF');
 const MAIL_LIMIT = 20e6; // limite prudente para anexos de e-mail
-const APP_VERSION = '16'; // igual ao número em CACHE no sw.js
+const APP_VERSION = '17'; // igual ao número em CACHE no sw.js
 
 // ---------- componentes Carbon (HTML) ----------
 function textField(id, label, value = '', { hint = '', placeholder = '', autocomplete = 'off' } = {}) {
@@ -795,6 +795,7 @@ async function finishOnboarding() {
   $('onboarding').hidden = true;
   document.body.classList.remove('cds--body--with-modal-open');
   render();
+  typeHello();
 }
 function nextStep() { ob.step++; renderOnboarding(); }
 
@@ -949,9 +950,38 @@ function isIOS() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 }
 
+// "Olá, nome." aparece como se estivesse a ser escrito, ao abrir o app e ao voltar a ele.
+let helloText = 'Olá.';
+let typingTimer = null;
+function typeHello() {
+  const el = $('hello-text');
+  const h1 = $('hello');
+  clearTimeout(typingTimer);
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { el.textContent = helloText; typingTimer = null; return; }
+  const text = helloText;
+  let i = 0;
+  el.textContent = '';
+  h1.classList.add('is-typing');
+  const step = () => {
+    el.textContent = text.slice(0, ++i);
+    if (i < text.length) {
+      typingTimer = setTimeout(step, text[i - 1] === ',' ? 260 : 80); // pausa curta depois de "Olá,"
+    } else {
+      typingTimer = null;
+      setTimeout(() => h1.classList.remove('is-typing'), 900);
+    }
+  };
+  typingTimer = setTimeout(step, 250);
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && $('inicio').classList.contains('is-active') && $('onboarding').hidden) typeHello();
+});
+
 function renderHome() {
   const { person, org } = state.settings;
-  $('hello').textContent = person.trim() ? `Olá, ${person.trim()}.` : 'Olá.';
+  helloText = person.trim() ? `Olá, ${person.trim()}.` : 'Olá.';
+  $('hello').setAttribute('aria-label', helloText);
+  if (!typingTimer) $('hello-text').textContent = helloText;
   const notices = [];
   if (isIOS() && !isStandalone()) {
     notices.push(notification('warning', 'Adicione ao ecrã principal', `${icon('ios-share', 'inline-ico')} <b>Partilhar</b> › <b>Adicionar ao ecrã principal</b>`));
@@ -1035,6 +1065,6 @@ function render() {
   // Depois de "Atualizar app": volta a Ajustes e confirma com o visto.
   let updated = false;
   try { updated = sessionStorage.getItem('recibos-updated') === '1'; sessionStorage.removeItem('recibos-updated'); } catch {}
-  if (updated) { go('ajustes'); check(); }
+  if (updated) { go('ajustes'); check(); } else if (!needsOnboarding()) typeHello();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
 })();

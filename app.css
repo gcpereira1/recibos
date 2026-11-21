@@ -269,3 +269,9 @@ svg { fill: currentColor; }
   .fx.go .fx-check { animation: none; stroke-dashoffset: 0; }
 }
 .pending-row .count { display: inline-block; }
+
+/* Cursor de escrita do "Olá, nome." */
+.caret { display: none; width: .08em; min-width: 3px; height: .95em; margin-left: .06em; background: currentColor; vertical-align: -0.1em; }
+.title.is-typing .caret { display: inline-block; animation: caret-blink 1s steps(1) infinite; }
+@keyframes caret-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .title.is-typing .caret { display: none; } }
