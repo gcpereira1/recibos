@@ -17,7 +17,40 @@ const byName = (a, b) => collator.compare(a.name, b.name);
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
 const isPdf = (f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '');
 const safeName = (s) => String(s).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').trim() || 'Sem nome';
+const icon = (name, cls = '') => `<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+const kindOf = (n) => (n.ext === 'jpg' ? 'Foto' : n.pageCount ? `PDF, ${n.pageCount} páginas` : 'PDF');
 const MAIL_LIMIT = 20e6; // limite prudente para anexos de e-mail
+
+// ---------- componentes Carbon (HTML) ----------
+function textField(id, label, value = '', { hint = '', placeholder = '', autocomplete = 'off' } = {}) {
+  return `<div class="cds--form-item cds--text-input-wrapper">
+    <label for="${id}" class="cds--label">${esc(label)}</label>
+    <div class="cds--text-input__field-outer-wrapper"><div class="cds--text-input__field-wrapper">
+      <input id="${id}" class="cds--text-input cds--text-input--lg cds--layout--size-lg" type="text" maxlength="60" autocomplete="${autocomplete}" value="${esc(value)}" placeholder="${esc(placeholder)}">
+    </div></div>
+    ${hint ? `<div class="cds--form__helper-text">${esc(hint)}</div>` : ''}
+  </div>`;
+}
+function selectField(id, label, options) {
+  return `<div class="cds--form-item"><div class="cds--select">
+    <label for="${id}" class="cds--label">${esc(label)}</label>
+    <div class="cds--select-input__wrapper">
+      <select id="${id}" class="cds--select-input cds--select-input--lg cds--layout--size-lg">${options}</select>
+      ${icon('chevron-down', 'cds--select__arrow')}
+    </div>
+  </div></div>`;
+}
+function notification(kind, title, subtitle, actionHtml = '') {
+  return `<div class="cds--inline-notification cds--inline-notification--${kind} cds--inline-notification--low-contrast" role="status">
+    <div class="cds--inline-notification__details">
+      ${icon(kind === 'warning' ? 'warning' : 'information', 'cds--inline-notification__icon')}
+      <div class="cds--inline-notification__text-wrapper">
+        <div class="cds--inline-notification__title">${title}</div>
+        <div class="cds--inline-notification__subtitle">${subtitle}${actionHtml}</div>
+      </div>
+    </div>
+  </div>`;
+}
 
 // ---------- base de dados (IndexedDB, só neste aparelho) ----------
 let db;
@@ -61,12 +94,11 @@ async function load() {
   state.notes = notes.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-// URLs de pré-visualização: uma por recibo, libertadas quando o recibo é apagado.
+// Miniaturas: uma URL por recibo, libertada quando o recibo é apagado.
 const thumbUrls = new Map();
 function thumbUrl(note) {
-  const src = note.thumb;
-  if (!src) return null;
-  if (!thumbUrls.has(note.id)) thumbUrls.set(note.id, URL.createObjectURL(src));
+  if (!note.thumb) return null;
+  if (!thumbUrls.has(note.id)) thumbUrls.set(note.id, URL.createObjectURL(note.thumb));
   return thumbUrls.get(note.id);
 }
 function dropThumb(id) {
@@ -77,8 +109,12 @@ function dropThumb(id) {
 
 // ---------- navegação e mensagens ----------
 function go(id) {
-  document.querySelectorAll('.page').forEach((p) => p.classList.toggle('active', p.id === id));
-  document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === id));
+  document.querySelectorAll('.page').forEach((p) => p.classList.toggle('is-active', p.id === id));
+  document.querySelectorAll('.tab').forEach((b) => {
+    const on = b.dataset.tab === id;
+    b.classList.toggle('is-active', on);
+    if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
   window.scrollTo({ top: 0 });
   render();
 }
@@ -89,36 +125,49 @@ document.addEventListener('click', (e) => {
 
 let toastTimer;
 function toast(msg) {
-  let el = $('toast');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'toast';
-    el.className = 'toast';
-    el.setAttribute('role', 'status');
-    document.body.append(el);
-  }
+  const el = $('toast');
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
 }
 
+// ---------- janela (Carbon modal) ----------
 let onModalClose = null;
 let busy = false; // enquanto processa fotos ou guarda, a janela não fecha
-function openModal(html, onClose) {
-  $('dialog').innerHTML = html;
-  $('modal').classList.remove('hidden');
+const modalOpen = () => $('modal').classList.contains('is-visible');
+
+// spec: { title, label?, body, actions: [{ id, label, kind }], closable? }
+function setModal(spec) {
+  const actions = spec.actions || [];
+  $('modal-container').innerHTML = `
+    <div class="cds--modal-header">
+      ${spec.label ? `<p class="cds--modal-header__label">${esc(spec.label)}</p>` : ''}
+      <h2 class="cds--modal-header__heading" id="modal-title">${esc(spec.title)}</h2>
+      ${spec.closable === false ? '' : `<div class="cds--modal-close-button"><button class="cds--modal-close" type="button" data-modal-close aria-label="Fechar">${icon('close', 'cds--modal-close__icon')}</button></div>`}
+    </div>
+    <div class="cds--modal-content">${spec.body || ''}</div>
+    ${actions.length ? `<div class="cds--modal-footer cds--btn-set">${actions.map((a) => `<button type="button" class="cds--btn cds--btn--${a.kind || 'primary'}" id="${a.id}" ${a.disabled ? 'disabled' : ''}>${esc(a.label)}</button>`).join('')}</div>` : ''}`;
+}
+function openModal(spec, onClose) {
+  setModal(spec);
   onModalClose = onClose || null;
+  $('modal').classList.add('is-visible');
+  document.body.classList.add('cds--body--with-modal-open');
+  $('modal-title')?.focus?.();
 }
 function closeModal() {
-  $('modal').classList.add('hidden');
-  $('dialog').innerHTML = '';
+  $('modal').classList.remove('is-visible');
+  document.body.classList.remove('cds--body--with-modal-open');
+  $('modal-container').innerHTML = '';
   const fn = onModalClose;
   onModalClose = null;
   if (fn) fn();
 }
-const modalOpen = () => !$('modal').classList.contains('hidden');
-$('modal').addEventListener('click', (e) => { if (e.target === $('modal') && !busy) closeModal(); });
+$('modal').addEventListener('click', (e) => {
+  if (busy) return;
+  if (e.target === $('modal') || e.target.closest('[data-modal-close]')) closeModal();
+});
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modalOpen() && !busy) closeModal(); });
 
 // ---------- imagens ----------
@@ -214,32 +263,34 @@ function projectOptions(selected, withNew) {
 function renderCapture(status) {
   const d = draft;
   const kind = d.pdf
-    ? `PDF: ${esc(d.pdfName)}`
-    : d.pages.length > 1 ? `${d.pages.length} páginas, vão ser juntas num PDF` : d.pages.length ? '1 página' : '';
+    ? `PDF: ${d.pdfName}`
+    : d.pages.length > 1 ? `${d.pages.length} páginas. Vão ser juntas num só PDF.` : d.pages.length ? '1 página. Se o recibo tiver mais, adicione as outras.' : '';
   const thumbs = d.pdf
-    ? '<div class="page-thumb"><div class="thumb" style="width:100%;height:100%">PDF</div></div>'
-    : d.pages.map((p, i) => `<div class="page-thumb"><img src="${p.url}" alt="Página ${i + 1}"><button type="button" data-remove-page="${i}" aria-label="Remover página ${i + 1}">×</button></div>`).join('')
-      + '<button type="button" class="add-page" id="cap-add">+ Página</button>';
-  const html = `
-    <h2>Novo recibo</h2>
-    <p class="muted">${status ? esc(status) : kind}</p>
-    <div class="pages">${thumbs}</div>
-    <label class="field">Projeto<select id="cap-project">${projectOptions(d.projectId, true)}</select></label>
-    <label class="field ${d.projectId === '__new' ? '' : 'hidden'}" id="cap-new-wrap">Nome do novo projeto<input id="cap-new" maxlength="60" autocomplete="off" value="${esc(d.newName)}"></label>
-    <div class="row-actions">
-      <button type="button" class="secondary" id="cap-cancel">Cancelar</button>
-      <button type="button" class="primary" id="cap-save" ${busy ? 'disabled' : ''}>Guardar</button>
-    </div>`;
-  if (modalOpen()) $('dialog').innerHTML = html;
-  else openModal(html, discardDraft);
+    ? `<div class="page-thumb"><div class="doc">${icon('document-pdf')}</div></div>`
+    : d.pages.map((p, i) => `<div class="page-thumb"><img src="${p.url}" alt="Página ${i + 1}"><button type="button" data-remove-page="${i}" aria-label="Remover página ${i + 1}">${icon('close')}</button></div>`).join('')
+      + `<button type="button" class="add-page" id="cap-add">${icon('add')}Página</button>`;
+  const spec = {
+    title: 'Novo recibo',
+    body: `
+      <p class="muted">${esc(status || kind)}</p>
+      <div class="pages">${thumbs}</div>
+      ${selectField('cap-project', 'Projeto', projectOptions(d.projectId, true))}
+      <div id="cap-new-wrap" ${d.projectId === '__new' ? '' : 'hidden'}>${textField('cap-new', 'Nome do novo projeto', d.newName)}</div>`,
+    actions: [
+      { id: 'cap-cancel', label: 'Cancelar', kind: 'secondary' },
+      { id: 'cap-save', label: 'Guardar', kind: 'primary', disabled: busy },
+    ],
+  };
+  if (modalOpen()) setModal(spec);
+  else openModal(spec, discardDraft);
 
   $('cap-project').onchange = (e) => {
     d.projectId = e.target.value;
-    $('cap-new-wrap').classList.toggle('hidden', d.projectId !== '__new');
+    $('cap-new-wrap').hidden = d.projectId !== '__new';
     if (d.projectId === '__new') $('cap-new').focus();
   };
   $('cap-new').oninput = (e) => { d.newName = e.target.value; };
-  $('cap-cancel').onclick = closeModal;
+  $('cap-cancel').onclick = () => { if (!busy) closeModal(); };
   $('cap-save').onclick = saveDraft;
   $('cap-add')?.addEventListener('click', () => $('photo-input').click());
   document.querySelectorAll('[data-remove-page]').forEach((b) => b.addEventListener('click', () => {
@@ -311,17 +362,24 @@ async function createProject(rawName) {
 $('add-project-form').onsubmit = async (e) => {
   e.preventDefault();
   const p = await createProject($('new-project').value);
-  if (p) { $('new-project').value = ''; render(); }
+  if (p) { $('new-project').value = ''; toast(`Projeto "${p.name}" criado`); render(); }
 };
 
-function editProject(id) {
+function openProject(id) {
   const p = state.projects.find((x) => x.id === id);
   if (!p) return;
-  openModal(`
-    <h2>Editar projeto</h2>
-    <label class="field">Nome<input id="edit-name" maxlength="60" value="${esc(p.name)}" autocomplete="off"></label>
-    <div class="row-actions"><button class="secondary" id="edit-cancel">Cancelar</button><button class="primary" id="edit-save">Guardar</button></div>`);
-  $('edit-cancel').onclick = closeModal;
+  const all = state.notes.filter((n) => n.projectId === id);
+  openModal({
+    title: p.name,
+    label: 'Projeto',
+    body: `<p class="muted">${plural(all.filter((n) => !n.sentAt).length, 'recibo por enviar', 'recibos por enviar')}, ${plural(all.filter((n) => n.sentAt).length, 'enviado', 'enviados')}.</p>
+      ${textField('edit-name', 'Nome do projeto', p.name)}`,
+    actions: [
+      { id: 'edit-del', label: 'Eliminar', kind: 'danger--tertiary' },
+      { id: 'edit-save', label: 'Guardar nome', kind: 'primary' },
+    ],
+  });
+  $('edit-del').onclick = () => removeProject(id);
   $('edit-save').onclick = async () => {
     const name = $('edit-name').value.trim();
     if (!name) { alert('Escreva o nome do projeto.'); return; }
@@ -330,6 +388,7 @@ function editProject(id) {
     await putOne('projects', p);
     state.projects.sort(byName);
     closeModal();
+    toast('Nome guardado');
     render();
   };
 }
@@ -338,11 +397,13 @@ async function removeProject(id) {
   const p = state.projects.find((x) => x.id === id);
   if (!p) return;
   const count = state.notes.filter((n) => n.projectId === id).length;
-  if (count) { alert(`O projeto "${p.name}" tem ${plural(count, 'recibo', 'recibos')}. Mude-os de projeto ou apague-os antes de eliminar o projeto.`); return; }
+  if (count) { alert(`O projeto "${p.name}" tem ${plural(count, 'recibo', 'recibos')}. ${count === 1 ? 'Mude-o de projeto ou apague-o' : 'Mude-os de projeto ou apague-os'} antes de eliminar o projeto.`); return; }
   if (!confirm(`Eliminar o projeto "${p.name}"?`)) return;
   await delOne('projects', id);
   state.projects = state.projects.filter((x) => x.id !== id);
   if (state.settings.lastProject === id) { state.settings.lastProject = null; await saveSettings(); }
+  closeModal();
+  toast('Projeto eliminado');
   render();
 }
 
@@ -351,20 +412,25 @@ function openNote(id) {
   const n = state.notes.find((x) => x.id === id);
   if (!n) return;
   const url = URL.createObjectURL(n.blob);
-  const kind = n.ext === 'jpg' ? 'Foto' : n.pageCount ? `PDF, ${n.pageCount} páginas` : 'PDF';
-  openModal(`
-    <h2>${esc(projectName(n.projectId))}</h2>
-    <p class="muted">${fmtDateTime(n.createdAt)} · ${kind} · ${fmtSize(n.size)}${n.sentAt ? ` · enviado em ${fmtDate(n.sentAt)}` : ''}</p>
-    ${n.ext === 'jpg' ? `<img class="preview" src="${url}" alt="Recibo">` : `<p><a class="secondary" style="display:inline-block;text-decoration:none" href="${url}" target="_blank" rel="noopener">Abrir PDF</a></p>`}
-    <label class="field">Projeto<select id="det-project">${projectOptions(n.projectId, false)}</select></label>
-    <div class="row-actions"><button class="danger-btn" id="det-del">Apagar</button><button class="primary" id="det-close">Fechar</button></div>`,
-  () => URL.revokeObjectURL(url));
+  openModal({
+    title: projectName(n.projectId),
+    label: fmtDateTime(n.createdAt),
+    body: `<p class="muted">${kindOf(n)} · ${fmtSize(n.size)}${n.sentAt ? ` · enviado em ${fmtDate(n.sentAt)}` : ''}</p>
+      ${n.ext === 'jpg'
+        ? `<img class="preview" src="${url}" alt="Recibo">`
+        : `<a class="cds--btn cds--btn--tertiary cds--btn--xl cds--layout--size-xl full" href="${url}" target="_blank" rel="noopener">Abrir PDF${icon('document-pdf', 'cds--btn__icon')}</a>`}
+      ${selectField('det-project', 'Mudar de projeto', projectOptions(n.projectId, false))}`,
+    actions: [
+      { id: 'det-del', label: 'Apagar', kind: 'danger--tertiary' },
+      { id: 'det-close', label: 'Fechar', kind: 'primary' },
+    ],
+  }, () => URL.revokeObjectURL(url));
   $('det-close').onclick = closeModal;
   $('det-project').onchange = async (e) => {
     n.projectId = e.target.value;
     await putOne('notes', n);
-    toast(`Movido para ${projectName(n.projectId)}`);
     closeModal();
+    toast(`Movido para ${projectName(n.projectId)}`);
     render();
   };
   $('det-del').onclick = async () => {
@@ -373,6 +439,7 @@ function openNote(id) {
     state.notes = state.notes.filter((x) => x.id !== n.id);
     dropThumb(n.id);
     closeModal();
+    toast('Recibo apagado');
     render();
   };
 }
@@ -393,40 +460,47 @@ function startClose() {
   const months = groupByMonth(pending);
   const total = pending.reduce((s, n) => s + n.size, 0);
   const tooBig = total > MAIL_LIMIT;
-  openModal(`
-    <h2>Fechar e enviar</h2>
-    <p class="muted">${plural(pending.length, 'recibo', 'recibos')} por enviar, ${fmtSize(total)}. O ZIP tem uma pasta por mês e, dentro, uma por projeto.</p>
-    ${tooBig ? `<div class="notice warn">Pode ser grande demais para um só e-mail. Escolha os meses a enviar agora e envie os restantes noutro e-mail.</div>` : ''}
-    <div id="close-months" class="${tooBig ? '' : 'hidden'}">
-      ${months.map(([m, ns]) => `<label class="check"><input type="checkbox" value="${m}" checked> ${monthLabel(m)}: ${plural(ns.length, 'recibo', 'recibos')}, ${fmtSize(ns.reduce((s, n) => s + n.size, 0))}</label>`).join('')}
-    </div>
-    <p class="note">No ecrã seguinte escolha o Outlook e a destinatária. Para guardar uma cópia, escolha também "Guardar em Ficheiros".</p>
-    <div class="row-actions"><button class="secondary" id="close-cancel">Cancelar</button><button class="primary" id="close-go">Preparar ZIP</button></div>`);
+  openModal({
+    title: 'Fechar e enviar',
+    body: `<p>${plural(pending.length, 'recibo', 'recibos')} por enviar (${fmtSize(total)}). Vai ser criado um ZIP com uma pasta por mês e, dentro, uma por projeto.</p>
+      ${tooBig ? notification('warning', 'ZIP grande', 'Pode não caber num só e-mail. Escolha os meses a enviar agora e envie os restantes noutro e-mail.') : ''}
+      <fieldset class="cds--fieldset" id="close-months" ${tooBig ? '' : 'hidden'}>
+        ${months.map(([m, ns], i) => `<div class="cds--checkbox-wrapper"><input type="checkbox" class="cds--checkbox" id="cm-${i}" value="${m}" checked><label for="cm-${i}" class="cds--checkbox-label"><span class="cds--checkbox-label-text">${monthLabel(m)}: ${plural(ns.length, 'recibo', 'recibos')}, ${fmtSize(ns.reduce((s, n) => s + n.size, 0))}</span></label></div>`).join('')}
+      </fieldset>
+      <p class="muted">No ecrã seguinte escolha o Outlook e a pessoa a quem envia.</p>`,
+    actions: [
+      { id: 'close-cancel', label: 'Cancelar', kind: 'secondary' },
+      { id: 'close-go', label: 'Preparar ZIP', kind: 'primary' },
+    ],
+  });
   $('close-cancel').onclick = closeModal;
   $('close-go').onclick = async () => {
     const chosen = new Set([...document.querySelectorAll('#close-months input:checked')].map((i) => i.value));
     const notes = pending.filter((n) => chosen.has(n.month));
     if (!notes.length) { alert('Escolha pelo menos um mês.'); return; }
+    busy = true;
     $('close-go').disabled = true;
     $('close-go').textContent = 'A preparar…';
     try {
       const pkg = await buildPackage(notes);
+      busy = false;
       showShare(pkg, notes);
     } catch {
-      alert('Não foi possível criar o ZIP. Tente outra vez.');
+      busy = false;
       closeModal();
+      alert('Não foi possível criar o ZIP. Tente outra vez.');
     }
   };
 }
 
 // Uma pasta por mês e, dentro, uma por projeto. Devolve as entradas do ZIP e o caminho de cada recibo.
-async function zipEntries(notes, prefix = '') {
+async function zipEntries(notes) {
   const used = new Set();
   const entries = [];
   const paths = new Map();
   const sorted = [...notes].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   for (const n of sorted) {
-    const base = `${prefix}${n.month}/${safeName(projectName(n.projectId))}/${n.stamp}`;
+    const base = `${n.month}/${safeName(projectName(n.projectId))}/${n.stamp}`;
     let path = `${base}.${n.ext}`;
     for (let i = 2; used.has(path); i++) path = `${base}_${i}.${n.ext}`;
     used.add(path);
@@ -461,11 +535,15 @@ async function buildPackage(notes) {
 // A partilha tem de ser chamada logo a seguir a um toque, por isso o ZIP é preparado antes.
 function showShare(pkg, notes) {
   const canShare = !!navigator.canShare?.({ files: [pkg.file] });
-  $('dialog').innerHTML = `
-    <h2>ZIP pronto</h2>
-    <p class="muted">${esc(pkg.file.name)} · ${plural(notes.length, 'recibo', 'recibos')} · ${fmtSize(pkg.file.size)}</p>
-    <p class="note">${canShare ? 'Toque em Partilhar, escolha o Outlook e a destinatária, e envie.' : 'Este navegador não partilha ficheiros. O ZIP vai ser descarregado para anexar ao e-mail.'}</p>
-    <div class="row-actions"><button class="secondary" id="share-cancel">Cancelar</button><button class="primary" id="share-go">${canShare ? 'Partilhar' : 'Descarregar'}</button></div>`;
+  setModal({
+    title: 'ZIP pronto',
+    body: `<p class="muted">${esc(pkg.file.name)} · ${plural(notes.length, 'recibo', 'recibos')} · ${fmtSize(pkg.file.size)}</p>
+      <p>${canShare ? 'Toque em <b>Partilhar</b>, escolha o Outlook e a pessoa a quem envia, e envie.' : 'Este navegador não partilha ficheiros. O ZIP vai ser descarregado para anexar ao e-mail.'}</p>`,
+    actions: [
+      { id: 'share-cancel', label: 'Cancelar', kind: 'secondary' },
+      { id: 'share-go', label: canShare ? 'Partilhar' : 'Descarregar', kind: 'primary' },
+    ],
+  });
   $('share-cancel').onclick = closeModal;
   $('share-go').onclick = async () => {
     if (canShare) {
@@ -494,10 +572,15 @@ function download(file) {
 }
 
 function askSent(notes) {
-  $('dialog').innerHTML = `
-    <h2>O e-mail foi enviado?</h2>
-    <p class="muted">Se sim, ${notes.length === 1 ? 'o recibo passa' : `os ${notes.length} recibos passam`} para "Enviados" e não volta${notes.length === 1 ? '' : 'm'} a entrar no próximo fecho.</p>
-    <div class="row-actions"><button class="secondary" id="sent-no">Ainda não</button><button class="primary" id="sent-yes">Sim, enviado</button></div>`;
+  const one = notes.length === 1;
+  setModal({
+    title: 'O e-mail foi enviado?',
+    body: `<p>Se sim, ${one ? 'o recibo passa' : `os ${notes.length} recibos passam`} para "Enviados" e não volta${one ? '' : 'm'} a entrar no próximo fecho.</p>`,
+    actions: [
+      { id: 'sent-no', label: 'Ainda não', kind: 'secondary' },
+      { id: 'sent-yes', label: 'Sim, foi enviado', kind: 'primary' },
+    ],
+  });
   $('sent-no').onclick = closeModal;
   $('sent-yes').onclick = async () => {
     const at = new Date().toISOString();
@@ -517,6 +600,7 @@ async function deleteSentMonth(month) {
   const ids = new Set(notes.map((n) => n.id));
   state.notes = state.notes.filter((n) => !ids.has(n.id));
   ids.forEach(dropThumb);
+  toast('Mês apagado');
   render();
 }
 
@@ -528,7 +612,7 @@ const BACKUP_DAYS = 30;
 
 async function startBackup() {
   if (!state.notes.length && !state.projects.length) { alert('Ainda não há recibos nem projetos para guardar.'); return; }
-  openModal('<h2>Cópia de segurança</h2><p class="muted">A preparar…</p>');
+  openModal({ title: 'Cópia de segurança', body: '<p class="muted">A preparar…</p>', closable: false });
   busy = true;
   try {
     const { entries, paths } = await zipEntries(state.notes);
@@ -553,13 +637,17 @@ async function startBackup() {
 
 function showBackupShare(file) {
   const canShare = !!navigator.canShare?.({ files: [file] });
-  $('dialog').innerHTML = `
-    <h2>Cópia pronta</h2>
-    <p class="muted">${esc(file.name)} · ${plural(state.notes.length, 'recibo', 'recibos')} · ${fmtSize(file.size)}</p>
-    <p class="note">${canShare
-      ? 'Toque em Partilhar, escolha "Guardar em Ficheiros" e depois a pasta no iCloud Drive (por exemplo, uma pasta "Recibos"). O iPhone lembra-se da última pasta usada.'
-      : 'O ZIP vai ser descarregado. Guarde-o numa pasta de cópias de segurança.'}</p>
-    <div class="row-actions"><button class="secondary" id="bk-cancel">Cancelar</button><button class="primary" id="bk-go">${canShare ? 'Partilhar' : 'Descarregar'}</button></div>`;
+  setModal({
+    title: 'Cópia pronta',
+    body: `<p class="muted">${esc(file.name)} · ${plural(state.notes.length, 'recibo', 'recibos')} · ${fmtSize(file.size)}</p>
+      <p>${canShare
+        ? 'Toque em <b>Partilhar</b>, escolha <b>Guardar em Ficheiros</b> e depois a pasta no iCloud Drive (por exemplo, uma pasta "Recibos"). O iPhone lembra-se da última pasta usada.'
+        : 'O ZIP vai ser descarregado. Guarde-o numa pasta de cópias de segurança.'}</p>`,
+    actions: [
+      { id: 'bk-cancel', label: 'Cancelar', kind: 'secondary' },
+      { id: 'bk-go', label: canShare ? 'Partilhar' : 'Descarregar', kind: 'primary' },
+    ],
+  });
   $('bk-cancel').onclick = closeModal;
   $('bk-go').onclick = async () => {
     if (canShare) {
@@ -614,7 +702,7 @@ async function restoreFrom(file) {
   if (!candidates.length && !newProjects.length) { alert('Esta cópia não tem nada que ainda não esteja neste telemóvel.'); return; }
   if (!confirm(`Restaurar ${plural(candidates.length, 'recibo', 'recibos')} e ${plural(newProjects.length, 'projeto novo', 'projetos novos')}? O que já existe neste telemóvel fica como está.`)) return;
 
-  openModal('<h2>A restaurar…</h2><p class="muted">Não feche o app.</p>');
+  openModal({ title: 'A restaurar…', body: '<p>Não feche o app.</p>', closable: false });
   busy = true;
   try {
     const newNotes = [];
@@ -645,7 +733,7 @@ async function restoreFrom(file) {
     await load();
     busy = false;
     closeModal();
-    toast(`${plural(newNotes.length, 'recibo restaurado', 'recibos restaurados')}`);
+    toast(plural(newNotes.length, 'recibo restaurado', 'recibos restaurados'));
     render();
   } catch (err) {
     busy = false;
@@ -665,18 +753,23 @@ const backupDue = () => state.notes.length > 0
   && (!state.settings.lastBackup || Date.now() - new Date(state.settings.lastBackup).getTime() > BACKUP_DAYS * 864e5);
 
 // ---------- ecrãs ----------
-function noteRow(n) {
+function noteItem(n) {
   const t = thumbUrl(n);
-  const kind = n.ext === 'jpg' ? 'Foto' : n.pageCount ? `PDF, ${n.pageCount} páginas` : 'PDF';
-  return `<button class="row" data-note="${esc(n.id)}">
-    ${t ? `<img class="thumb" src="${t}" alt="">` : '<span class="thumb">PDF</span>'}
-    <span class="row-meta"><strong>${fmtDateTime(n.createdAt)}</strong><small>${kind} · ${fmtSize(n.size)}</small></span>
-    <span aria-hidden="true">›</span>
-  </button>`;
+  return `<li class="cds--contained-list-item cds--contained-list-item--clickable">
+    <button type="button" class="cds--contained-list-item__content item" data-note="${esc(n.id)}">
+      ${t ? `<img class="thumb" src="${t}" alt="">` : `<span class="thumb">${icon('document-pdf')}</span>`}
+      <span class="item-meta"><strong>${fmtDateTime(n.createdAt)}</strong><small>${kindOf(n)} · ${fmtSize(n.size)}</small></span>
+      ${icon('chevron-right', 'chev')}
+    </button>
+  </li>`;
 }
 
 function renderNotes() {
-  document.querySelectorAll('.seg').forEach((b) => b.classList.toggle('active', b.dataset.view === state.view));
+  document.querySelectorAll('[data-view]').forEach((b) => {
+    const on = b.dataset.view === state.view;
+    b.classList.toggle('cds--content-switcher--selected', on);
+    b.setAttribute('aria-selected', String(on));
+  });
   const sent = state.view === 'sent';
   const notes = state.notes.filter((n) => (sent ? n.sentAt : !n.sentAt));
   if (!notes.length) {
@@ -691,62 +784,89 @@ function renderNotes() {
       byProject.get(name).push(n);
     });
     const projects = [...byProject.entries()].sort((a, b) => collator.compare(a[0], b[0]));
-    return `<div class="group-month"><span>${monthLabel(m)} · ${ns.length}</span>${sent ? `<button class="text-button danger" data-delete-month="${m}">Apagar mês</button>` : ''}</div>`
-      + projects.map(([p, list]) => `<div class="group-project">${esc(p)} · ${list.length}</div>${list.map(noteRow).join('')}`).join('');
+    return `<section class="month">
+      <div class="month-head"><h2>${monthLabel(m)}</h2><span class="cds--tag cds--tag--gray">${plural(ns.length, 'recibo', 'recibos')}</span></div>
+      ${projects.map(([p, list]) => `<div class="cds--contained-list cds--contained-list--on-page cds--contained-list--lg">
+        <div class="cds--contained-list__header"><div class="cds--contained-list__label">${esc(p)} · ${list.length}</div></div>
+        <ul>${list.map(noteItem).join('')}</ul>
+      </div>`).join('')}
+      ${sent ? `<button type="button" class="cds--btn cds--btn--danger--tertiary cds--btn--lg cds--layout--size-lg full" data-delete-month="${m}">Apagar ${monthLabel(m)} deste telemóvel${icon('trash-can', 'cds--btn__icon')}</button>` : ''}
+    </section>`;
   }).join('');
   document.querySelectorAll('[data-note]').forEach((b) => b.addEventListener('click', () => openNote(b.dataset.note)));
   document.querySelectorAll('[data-delete-month]').forEach((b) => b.addEventListener('click', () => deleteSentMonth(b.dataset.deleteMonth)));
 }
-document.querySelectorAll('.seg').forEach((b) => b.addEventListener('click', () => { state.view = b.dataset.view; renderNotes(); }));
+document.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => { state.view = b.dataset.view; renderNotes(); }));
 
 function renderProjects() {
   if (!state.projects.length) {
-    $('projects-list').innerHTML = '<p class="empty">Ainda não há projetos. Crie o primeiro acima ou ao guardar um recibo.</p>';
+    $('projects-list').innerHTML = '<p class="empty">Ainda não há projetos. Crie o primeiro acima, ou ao guardar um recibo.</p>';
     return;
   }
-  $('projects-list').innerHTML = state.projects.map((p) => {
-    const all = state.notes.filter((n) => n.projectId === p.id);
-    const pend = all.filter((n) => !n.sentAt).length;
-    return `<div class="project">
-      <span class="letter">${esc(p.name.charAt(0).toUpperCase())}</span>
-      <span class="project-meta"><strong>${esc(p.name)}</strong><small>${plural(pend, 'recibo por enviar', 'recibos por enviar')}${all.length > pend ? `, ${all.length - pend} enviados` : ''}</small></span>
-      <button class="text-button" data-edit="${esc(p.id)}">Editar</button>
-      <button class="text-button danger" data-remove="${esc(p.id)}">Eliminar</button>
-    </div>`;
-  }).join('');
-  document.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => editProject(b.dataset.edit)));
-  document.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', () => removeProject(b.dataset.remove)));
+  $('projects-list').innerHTML = `<div class="cds--contained-list cds--contained-list--on-page cds--contained-list--lg">
+    <div class="cds--contained-list__header"><div class="cds--contained-list__label">${plural(state.projects.length, 'projeto', 'projetos')}</div></div>
+    <ul>${state.projects.map((p) => {
+      const all = state.notes.filter((n) => n.projectId === p.id);
+      const pend = all.filter((n) => !n.sentAt).length;
+      return `<li class="cds--contained-list-item cds--contained-list-item--clickable">
+        <button type="button" class="cds--contained-list-item__content item" data-project="${esc(p.id)}">
+          <span class="item-meta"><strong>${esc(p.name)}</strong><small>${plural(pend, 'recibo por enviar', 'recibos por enviar')}${all.length > pend ? `, ${all.length - pend} enviados` : ''}</small></span>
+          ${icon('chevron-right', 'chev')}
+        </button>
+      </li>`;
+    }).join('')}</ul>
+  </div>`;
+  document.querySelectorAll('[data-project]').forEach((b) => b.addEventListener('click', () => openProject(b.dataset.project)));
+}
+
+function isStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+}
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 }
 
 function renderHome() {
   const { person, org } = state.settings;
   $('hello').textContent = person.trim() ? `Olá, ${person.trim()}.` : 'Olá.';
-  $('hello-sub').textContent = person.trim() || org.trim() ? 'Fotografe cada recibo no momento da compra.' : 'Comece por pôr o seu nome e a organização em Ajustes.';
+  $('hello-sub').textContent = 'Fotografe cada recibo na hora da compra.';
+  const notices = [];
+  if (isIOS() && !isStandalone()) {
+    notices.push(notification('warning', 'Instale o app', 'No Safari, toque em <b>Partilhar</b> e depois em <b>Adicionar ao ecrã principal</b>. Sem isto, o iPhone pode apagar os recibos.'));
+  }
+  if (!person.trim() && !org.trim()) {
+    notices.push(notification('info', 'Falta o seu nome', 'Escreva o seu nome e a organização em Ajustes.', `<div class="notice-action"><button type="button" class="cds--btn cds--btn--tertiary cds--btn--md cds--layout--size-md" data-go="ajustes">Abrir Ajustes</button></div>`));
+  }
+  if (backupDue()) {
+    notices.push(notification('warning', 'Faça uma cópia de segurança', `Há mais de ${BACKUP_DAYS} dias sem cópia no iCloud.`, `<div class="notice-action"><button type="button" class="cds--btn cds--btn--tertiary cds--btn--md cds--layout--size-md" data-go="ajustes">Fazer cópia</button></div>`));
+  }
+  $('home-notices').innerHTML = notices.join('');
+  $('home-notices').hidden = !notices.length;
   const pending = pendingNotes();
-  $('pending-count').textContent = plural(pending.length, 'recibo', 'recibos');
-  $('pending-detail').textContent = groupByMonth(pending).map(([m, ns]) => `${monthLabel(m)}: ${ns.length}`).join(' · ');
+  $('pending-count').textContent = String(pending.length);
+  $('pending-detail').textContent = pending.length
+    ? groupByMonth(pending).map(([m, ns]) => `${monthLabel(m)}: ${ns.length}`).join(' · ')
+    : 'Ainda não há recibos por enviar.';
   $('close-action').disabled = !pending.length;
-  $('backup-hint').classList.toggle('hidden', !backupDue());
 }
 
 function renderHeader() {
   const org = state.settings.org.trim();
-  $('brand').textContent = org || 'Recibos';
-  $('brand-sub').textContent = org ? 'Recibos' : '';
+  $('brand').textContent = org ? `Recibos · ${org}` : 'Recibos';
   document.title = org ? `Recibos ${org}` : 'Recibos';
 }
 
 async function renderSettings() {
   if (document.activeElement?.id !== 'set-person') $('set-person').value = state.settings.person;
   if (document.activeElement?.id !== 'set-org') $('set-org').value = state.settings.org;
-  const total = state.notes.reduce((s, n) => s + n.size, 0);
-  let persisted = null;
-  try { persisted = await navigator.storage?.persisted?.(); } catch {}
-  $('storage-info').textContent = `${plural(state.notes.length, 'recibo', 'recibos')} guardados, ${fmtSize(total)}.`
-    + (persisted === true ? ' Armazenamento protegido.' : persisted === false ? ' Armazenamento ainda não protegido: instale o app no ecrã principal.' : '');
   $('backup-info').textContent = state.settings.lastBackup
     ? `Última cópia: ${fmtDateTime(state.settings.lastBackup)}.`
     : 'Ainda não fez nenhuma cópia.';
+  const total = state.notes.reduce((s, n) => s + n.size, 0);
+  let persisted = null;
+  try { persisted = await navigator.storage?.persisted?.(); } catch {}
+  $('storage-info').textContent = `${plural(state.notes.length, 'recibo', 'recibos')} neste telemóvel, ${fmtSize(total)}.`
+    + (persisted === true ? ' Armazenamento protegido.' : persisted === false ? ' Armazenamento ainda não protegido: instale o app no ecrã principal.' : '');
 }
 
 $('settings-form').onsubmit = async (e) => {
@@ -767,21 +887,14 @@ function render() {
 }
 
 // ---------- arranque ----------
-function showInstallHint() {
-  const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  $('install-hint').classList.toggle('hidden', standalone || !ios);
-}
-
 (async () => {
   try {
     db = await openDB();
     await load();
   } catch {
-    document.querySelector('.shell').innerHTML = '<p class="notice warn">Este navegador não permite guardar dados. Abra o app no Safari, fora do modo privado.</p>';
+    document.querySelector('.app-main').innerHTML = notification('warning', 'Não é possível guardar dados', 'Abra o app no Safari, fora da navegação privada.');
     return;
   }
-  showInstallHint();
   render();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
 })();

@@ -1,0 +1,177 @@
+/* Recibos sobre o Carbon (tema White). Tudo monocromático e quadrado; texto e alvos grandes. */
+
+/* Escala: 1rem = 18px. Todo o Carbon usa rem, por isso texto, campos e botões crescem por igual. */
+html { font-size: 112.5%; -webkit-text-size-adjust: 100%; }
+
+/* Monocromático: o azul do Carbon passa a preto, e as cores de estado a cinzentos. */
+:root {
+  --cds-interactive: #161616;
+  --cds-focus: #161616;
+  --cds-focus-inset: #ffffff;
+  --cds-border-interactive: #161616;
+  --cds-link-primary: #161616;
+  --cds-link-primary-hover: #393939;
+  --cds-highlight: #e0e0e0;
+  --cds-button-primary: #161616;
+  --cds-button-primary-hover: #393939;
+  --cds-button-primary-active: #6f6f6f;
+  --cds-button-tertiary: #161616;
+  --cds-button-tertiary-hover: #393939;
+  --cds-button-tertiary-active: #6f6f6f;
+  --cds-button-danger-primary: #161616;
+  --cds-button-danger-secondary: #161616;
+  --cds-button-danger-hover: #393939;
+  --cds-button-danger-active: #6f6f6f;
+  --cds-support-info: #161616;
+  --cds-support-warning: #161616;
+  --cds-support-success: #161616;
+  --cds-support-error: #161616;
+  --cds-text-error: #161616;
+  --cds-notification-background-info: #f4f4f4;
+  --cds-notification-background-warning: #f4f4f4;
+  --cds-notification-background-success: #f4f4f4;
+  --cds-notification-background-error: #f4f4f4;
+  --tabbar-h: 4.25rem;
+  --header-h: 3.5rem;
+}
+*, *::before, *::after { border-radius: 0 !important; }
+body {
+  background: var(--cds-background);
+  color: var(--cds-text-primary);
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+}
+svg { fill: currentColor; }
+[hidden] { display: none !important; }
+
+/* Cabeçalho */
+.app-header {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center;
+  min-height: calc(var(--header-h) + env(safe-area-inset-top, 0px));
+  padding: env(safe-area-inset-top, 0px) max(1rem, env(safe-area-inset-right, 0px)) 0 max(1rem, env(safe-area-inset-left, 0px));
+  background: var(--cds-background);
+  border-bottom: 1px solid var(--cds-border-subtle-01);
+}
+.app-header__name {
+  font-size: 1rem; font-weight: 600; letter-spacing: .02em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Conteúdo */
+.app-main {
+  max-width: 40rem; margin: 0 auto;
+  padding: 1.5rem max(1rem, env(safe-area-inset-right, 0px)) calc(var(--tabbar-h) + 2rem + env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
+}
+.page { display: none; }
+.page.is-active { display: grid; gap: 1.5rem; align-content: start; }
+.title { font-size: 1.75rem; font-weight: 400; line-height: 1.2; margin: 0; }
+.subtitle { font-size: 1.125rem; font-weight: 600; margin: 0; }
+.lead { font-size: 1rem; line-height: 1.5; color: var(--cds-text-secondary); margin: -.75rem 0 0; }
+.body { font-size: 1rem; line-height: 1.5; margin: 0; }
+.muted { font-size: .875rem; line-height: 1.45; color: var(--cds-text-secondary); margin: 0; }
+.label { font-size: .875rem; color: var(--cds-text-secondary); margin: 0; }
+.count { font-size: 3rem; line-height: 1; margin: 0; font-weight: 400; font-variant-numeric: tabular-nums; }
+.stack { display: grid; gap: .75rem; }
+.full { width: 100%; max-width: none; }
+.cds--btn--xl { font-size: 1rem; }
+.cds--btn .cds--btn__icon { width: 1.25rem; height: 1.25rem; }
+.cds--label { font-size: .875rem; color: var(--cds-text-primary); }
+.cds--form__helper-text { font-size: .8125rem; }
+.cds--text-input, .cds--select-input { font-size: 1rem; }
+.cds--text-input--lg, .cds--select-input--lg { block-size: 3.25rem; }
+.pending-tile, .section-tile { display: grid; gap: .75rem; padding: 1.25rem 1rem; }
+.pending-tile .cds--btn { margin-top: .5rem; }
+
+/* Avisos */
+.cds--inline-notification { max-width: none; width: 100%; margin: 0; }
+.cds--inline-notification__title, .cds--inline-notification__subtitle { font-size: .9375rem; line-height: 1.4; }
+.notice-action { margin-top: .5rem; }
+
+/* Listas */
+.switcher { width: 100%; }
+.switcher .cds--content-switcher-btn { font-size: 1rem; }
+.month { display: grid; gap: .5rem; }
+.month-head { display: flex; justify-content: space-between; align-items: center; gap: .75rem; padding-top: .5rem; }
+.month-head h2 { font-size: 1.125rem; font-weight: 600; margin: 0; }
+.cds--contained-list__label { font-size: .875rem; }
+.cds--contained-list-item__content { font-size: 1rem; }
+.cds--contained-list-item--clickable .cds--contained-list-item__content.item {
+  display: flex; align-items: center; gap: 1rem; width: 100%; text-align: left;
+  padding: .75rem 1rem; min-block-size: 4.5rem; color: var(--cds-text-primary);
+}
+.item-meta { flex: 1; min-width: 0; display: grid; gap: .125rem; }
+.item-meta strong { font-weight: 400; font-size: 1rem; }
+.item-meta small { font-size: .8125rem; color: var(--cds-text-secondary); }
+.item svg.chev { width: 1.25rem; height: 1.25rem; flex: none; }
+.thumb {
+  width: 3.25rem; height: 3.25rem; flex: none; object-fit: cover;
+  background: var(--cds-layer-01); border: 1px solid var(--cds-border-subtle-01);
+  display: grid; place-items: center;
+}
+.thumb svg { width: 1.5rem; height: 1.5rem; }
+.empty { font-size: 1rem; line-height: 1.5; color: var(--cds-text-secondary); margin: 0; padding: 1rem 0; }
+
+/* Barra de secções em baixo */
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  background: var(--cds-background);
+  border-top: 1px solid var(--cds-border-subtle-01);
+}
+.tab {
+  min-height: var(--tabbar-h);
+  display: grid; justify-items: center; align-content: center; gap: .25rem;
+  border: 0; border-top: 3px solid transparent; background: none;
+  color: var(--cds-text-secondary); font: inherit; font-size: .8125rem; cursor: pointer;
+}
+.tab svg { width: 1.5rem; height: 1.5rem; }
+.tab.is-active { color: var(--cds-text-primary); border-top-color: var(--cds-border-interactive); font-weight: 600; }
+.tab:focus-visible { outline: 2px solid var(--cds-focus); outline-offset: -2px; }
+
+/* Janela (modal do Carbon). No telemóvel ocupa o ecrã todo. */
+.cds--modal-header__heading { font-size: 1.375rem; }
+.cds--modal-content { font-size: 1rem; display: grid; gap: 1.25rem; align-content: start; }
+.cds--modal-content > p { margin: 0; }
+.cds--modal-footer { block-size: auto; }
+.cds--modal-footer .cds--btn { block-size: 4rem; font-size: 1rem; }
+.cds--modal-close { inline-size: 3rem; block-size: 3rem; }
+.cds--modal-close__icon { width: 1.25rem; height: 1.25rem; }
+
+/* Páginas de um recibo novo */
+.pages { display: grid; grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr)); gap: .75rem; }
+.page-thumb { position: relative; aspect-ratio: 3 / 4; border: 1px solid var(--cds-border-subtle-01); background: var(--cds-layer-01); max-width: 100%; }
+.page-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.page-thumb .doc { width: 100%; height: 100%; display: grid; place-items: center; }
+.page-thumb .doc svg { width: 2rem; height: 2rem; }
+.page-thumb button {
+  position: absolute; top: 0; right: 0; width: 2.75rem; height: 2.75rem;
+  display: grid; place-items: center; border: 0; background: var(--cds-background-inverse); color: var(--cds-text-inverse); cursor: pointer;
+}
+.page-thumb button svg { width: 1.125rem; height: 1.125rem; }
+.add-page {
+  aspect-ratio: 3 / 4; border: 1px dashed var(--cds-border-strong-01); background: var(--cds-background);
+  display: grid; place-items: center; align-content: center; gap: .25rem; font: inherit; font-size: .875rem; color: var(--cds-text-primary); cursor: pointer;
+}
+.add-page svg { width: 1.5rem; height: 1.5rem; }
+.preview { width: 100%; max-height: 55dvh; object-fit: contain; background: var(--cds-layer-01); border: 1px solid var(--cds-border-subtle-01); }
+
+/* Mensagem breve */
+.toast {
+  position: fixed; left: 50%; z-index: 9100;
+  bottom: calc(var(--tabbar-h) + 1rem + env(safe-area-inset-bottom, 0px));
+  transform: translate(-50%, 1rem); opacity: 0; pointer-events: none;
+  width: max-content; max-width: calc(100% - 2rem); padding: .875rem 1.25rem;
+  background: var(--cds-background-inverse); color: var(--cds-text-inverse); font-size: 1rem;
+  transition: opacity 150ms, transform 150ms;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+@media (prefers-reduced-motion: reduce) {
+  .toast, .cds--modal, .cds--modal-container { transition: none !important; }
+}
+
+/* Os ícones vêm de um sprite sem tamanho próprio: fixar o tamanho de cada um. */
+.cds--inline-notification__icon { width: 1.25rem; height: 1.25rem; flex: none; }
+.cds--select__arrow { width: 1rem; height: 1rem; }
+.cds--btn__icon { flex: none; }

@@ -1,6 +1,6 @@
 // Funciona sem internet: tenta a rede primeiro (para receber atualizações) e usa a cópia guardada se falhar.
-const CACHE = 'recibos-v2';
-const ASSETS = ['./', './index.html', './app.js', './lib.js', './style.css', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
+const CACHE = 'recibos-v4';
+const ASSETS = ['./', './index.html', './app.js', './lib.js', './carbon.css', './app.css', './fonts/IBMPlexSans-Regular-Latin1.woff2', './fonts/IBMPlexSans-SemiBold-Latin1.woff2', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));

@@ -1,0 +1,14 @@
+{
+  "name": "recibos",
+  "private": true,
+  "description": "Ferramentas s\u00f3 de desenvolvimento: compilam o subconjunto do Carbon, as fontes e os \u00edcones usados pelo app. O app n\u00e3o tem build nem depend\u00eancias em runtime.",
+  "scripts": {
+    "build": "sass --quiet-deps --no-source-map --style=compressed --load-path=node_modules design/carbon.scss carbon.css && node design/copy-fonts.mjs && node design/icons.mjs"
+  },
+  "devDependencies": {
+    "@carbon/icons": "11.92.0",
+    "@carbon/styles": "1.119.0",
+    "@ibm/plex-sans": "1.1.0",
+    "sass": "1.108.0"
+  }
+}
