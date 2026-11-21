@@ -238,3 +238,34 @@ svg { fill: currentColor; }
   min-block-size: 3.75rem; block-size: auto; padding: 0 1rem;
 }
 .cds--modal-footer .cds--btn:not(.cds--skeleton) { padding-block: 0; align-items: center; justify-content: center; text-align: center; }
+
+/* Confirmações visuais (sem texto) */
+.fx { position: fixed; inset: 0; z-index: 9200; pointer-events: none; display: none; place-items: center; }
+.fx.go { display: grid; }
+.fx-box { display: grid; place-items: center; transform: scale(.8); }
+.fx-check { fill: none; stroke: #ffffff; stroke-linecap: square; stroke-dasharray: 60; stroke-dashoffset: 60; }
+.fx.go .fx-check { animation: fx-draw .35s .12s ease-out forwards; }
+/* A: visto do iOS, quadrado escuro no centro */
+.fx--hud .fx-box { width: 7.5rem; height: 7.5rem; background: rgba(22, 22, 22, .88); }
+.fx--hud .fx-check { width: 3.5rem; height: 3.5rem; stroke-width: 5; }
+.fx--hud.go { animation: fx-fade 1.3s ease forwards; }
+.fx--hud.go .fx-box { animation: fx-pop 1.3s cubic-bezier(.2, .9, .3, 1.3) forwards; }
+/* D: celebração do fecho do mês */
+.fx--party { background: rgba(255, 255, 255, .92); }
+.fx--party .fx-box { width: 9rem; height: 9rem; background: #161616; }
+.fx--party .fx-check { width: 5rem; height: 5rem; stroke-width: 6; }
+.fx--party.go { animation: fx-fade 2.4s ease forwards; }
+.fx--party.go .fx-box { animation: fx-pop 2.4s cubic-bezier(.2, .9, .3, 1.5) forwards; }
+.fx-bit { position: absolute; left: 50%; top: 50%; background: #161616; }
+.fx-bit--gray { background: #8d8d8d; }
+.fx-bit--line { background: transparent; border: 2px solid #161616; }
+@keyframes fx-draw { to { stroke-dashoffset: 0; } }
+@keyframes fx-fade { 0% { opacity: 0; } 12% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes fx-pop { 0% { transform: scale(.8); } 18% { transform: scale(1); } 100% { transform: scale(1); } }
+.count.bump { animation: fx-bump .35s ease; }
+@keyframes fx-bump { 50% { transform: scale(1.3); } }
+@media (prefers-reduced-motion: reduce) {
+  .fx.go, .fx.go .fx-box, .count.bump { animation: none; }
+  .fx.go .fx-check { animation: none; stroke-dashoffset: 0; }
+}
+.pending-row .count { display: inline-block; }

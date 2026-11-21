@@ -20,7 +20,7 @@ const safeName = (s) => String(s).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').tri
 const icon = (name, cls = '') => `<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const kindOf = (n) => (n.ext === 'jpg' ? 'Foto' : n.pageCount ? `PDF, ${n.pageCount} páginas` : 'PDF');
 const MAIL_LIMIT = 20e6; // limite prudente para anexos de e-mail
-const APP_VERSION = '14'; // igual ao número em CACHE no sw.js
+const APP_VERSION = '15'; // igual ao número em CACHE no sw.js
 
 // ---------- componentes Carbon (HTML) ----------
 function textField(id, label, value = '', { hint = '', placeholder = '', autocomplete = 'off' } = {}) {
@@ -123,6 +123,38 @@ document.addEventListener('click', (e) => {
   const t = e.target.closest('[data-tab],[data-go]');
   if (t) go(t.dataset.tab || t.dataset.go);
 });
+
+// Confirmações só visuais: visto rápido (como o iOS) e celebração no fecho do mês.
+const CHECK_SVG = '<svg class="fx-check" viewBox="0 0 48 48" aria-hidden="true"><path d="M10 25l9 9 19-20"/></svg>';
+let fxTimer;
+function playFx(kind, ms) {
+  const el = $('fx');
+  clearTimeout(fxTimer);
+  el.className = 'fx';
+  el.innerHTML = `<div class="fx-box">${CHECK_SVG}</div>`;
+  void el.offsetWidth;
+  el.classList.add(`fx--${kind}`, 'go');
+  fxTimer = setTimeout(() => { el.className = 'fx'; el.innerHTML = ''; }, ms);
+  return el;
+}
+function check() { playFx('hud', 1300); }
+function celebrate() {
+  const el = playFx('party', 2400);
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || !el.animate) return;
+  for (let i = 0; i < 32; i++) {
+    const b = document.createElement('span');
+    b.className = `fx-bit${i % 3 === 1 ? ' fx-bit--gray' : i % 3 === 2 ? ' fx-bit--line' : ''}`;
+    const ang = (i / 32) * Math.PI * 2 + Math.random() * 0.3;
+    const dist = 110 + Math.random() * 90;
+    const size = 8 + Math.random() * 10;
+    b.style.width = b.style.height = `${size}px`;
+    el.append(b);
+    b.animate([
+      { transform: 'translate(-50%, -50%) rotate(0deg)', opacity: 1 },
+      { transform: `translate(calc(-50% + ${Math.cos(ang) * dist}px), calc(-50% + ${Math.sin(ang) * dist + 50}px)) rotate(${Math.random() * 360}deg)`, opacity: 0 },
+    ], { duration: 1300 + Math.random() * 500, delay: 250, easing: 'cubic-bezier(.15,.7,.3,1)', fill: 'forwards' });
+  }
+}
 
 let toastTimer;
 function toast(msg) {
@@ -337,7 +369,7 @@ async function saveDraft() {
     navigator.storage?.persist?.().catch(() => {});
     busy = false;
     closeModal();
-    toast(`Guardado em ${projectName(projectId)}`);
+    check();
     render();
   } catch (err) {
     busy = false;
@@ -361,7 +393,7 @@ async function createProject(rawName) {
 $('add-project-form').onsubmit = async (e) => {
   e.preventDefault();
   const p = await createProject($('new-project').value);
-  if (p) { $('new-project').value = ''; toast(`Projeto "${p.name}" criado`); render(); }
+  if (p) { $('new-project').value = ''; check(); render(); }
 };
 
 function openProject(id) {
@@ -387,7 +419,7 @@ function openProject(id) {
     await putOne('projects', p);
     state.projects.sort(byName);
     closeModal();
-    toast('Nome guardado');
+    check();
     render();
   };
 }
@@ -429,7 +461,7 @@ function openNote(id) {
     n.projectId = e.target.value;
     await putOne('notes', n);
     closeModal();
-    toast(`Movido para ${projectName(n.projectId)}`);
+    check();
     render();
   };
   $('det-del').onclick = async () => {
@@ -575,7 +607,7 @@ function askSent(notes) {
     await write('notes', (s) => notes.forEach((n) => s.put({ ...n, sentAt: at })));
     notes.forEach((n) => { n.sentAt = at; });
     closeModal();
-    toast('Marcados como enviados');
+    celebrate();
     render();
   };
 }
@@ -657,7 +689,7 @@ function showBackupShare(file) {
   $('bk-go').onclick = async () => {
     if (!(await shareBackup(file))) return;
     closeModal();
-    toast('Cópia de segurança feita');
+    check();
     render();
   };
 }
@@ -727,7 +759,7 @@ async function restoreFrom(file) {
     await load();
     busy = false;
     closeModal();
-    toast(plural(newNotes.length, 'recibo restaurado', 'recibos restaurados'));
+    check();
     render();
   } catch (err) {
     busy = false;
@@ -931,7 +963,13 @@ function renderHome() {
   $('home-notices').hidden = !notices.length;
   $('notice-backup')?.addEventListener('click', startBackup);
   const pending = pendingNotes();
-  $('pending-count').textContent = String(pending.length);
+  const countEl = $('pending-count');
+  if (countEl.textContent !== String(pending.length)) {
+    countEl.textContent = String(pending.length);
+    countEl.classList.remove('bump');
+    void countEl.offsetWidth;
+    countEl.classList.add('bump');
+  }
   $('pending-detail').textContent = groupByMonth(pending).map(([m, ns]) => `${monthLabel(m)}: ${ns.length}`).join(' · ');
   $('pending-detail').hidden = !pending.length;
   $('close-action').disabled = !pending.length;
@@ -970,7 +1008,7 @@ $('settings-form').onsubmit = async (e) => {
   state.settings.person = $('set-person').value.trim();
   state.settings.org = $('set-org').value.trim();
   await saveSettings();
-  toast('Ajustes guardados');
+  check();
   render();
 };
 
